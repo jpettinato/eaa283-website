@@ -7,7 +7,7 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "eaa283-db"
-database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "e568a9ff-974f-4fc0-9338-3c2080f650c6"
 
 # R2 bucket for uploaded documents — create with:  npx wrangler r2 bucket create eaa283-documents
 [[r2_buckets]]
