@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Member Portal — EAA Chapter 283</title>
+<meta name="description" content="EAA Chapter 283 member portal — chapter documents, member directory, dues, newsletters, and event RSVPs.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A5BC4'/%3E%3Ctext x='32' y='42' font-family='Arial,sans-serif' font-weight='900' font-size='26' fill='%23fff' text-anchor='middle'%3E283%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script src="js/site.js" defer></script>
+<script src="js/members.js" defer></script>
+</head>
+<body>
+
+<header>
+  <div id="announce-bar" class="announce-bar" hidden>
+    <span></span>
+    <button aria-label="Dismiss announcement">✕</button>
+  </div>
+  <div class="nav-bar">
+    <a href="index.html" class="brand">
+      <div class="brand-badge">283</div>
+      <div class="brand-name">EAA Chapter 283</div>
+    </a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false">☰</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html" class="navlink">About</a>
+      <a href="events.html" class="navlink">Events</a>
+      <a href="news.html" class="navlink">News</a>
+      <a href="koala.html" class="navlink">Koala</a>
+      <a href="location.html" class="navlink">Location</a>
+      <a href="faq.html" class="navlink">FAQ</a>
+      <a href="contact.html" class="navlink">Contact</a>
+      <a href="members.html" class="nav-cta">Member Login</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ LOGIN / SIGNUP ============ -->
+<section id="auth-section" style="background:#EAF1FB; min-height:620px; display:flex; align-items:center; justify-content:center; padding:70px 24px;">
+  <div style="width:100%; max-width:440px;">
+    <div style="background:#fff; border:1px solid #e0e8f3; border-radius:20px; padding:44px 40px; box-shadow:0 30px 70px -30px rgba(16,32,58,.35);">
+      <div style="text-align:center; margin-bottom:30px;">
+        <div style="width:56px; height:56px; border-radius:14px; background:#0A5BC4; display:flex; align-items:center; justify-content:center; margin:0 auto 18px;">
+          <div style="width:20px; height:16px; border:3px solid #fff; border-radius:3px; margin-top:8px; position:relative;"><div style="position:absolute; left:50%; top:-13px; transform:translateX(-50%); width:14px; height:14px; border:3px solid #fff; border-bottom:none; border-radius:8px 8px 0 0;"></div></div>
+        </div>
+        <h1 style="font-family:'Archivo',sans-serif; font-weight:800; font-size:28px; letter-spacing:-0.02em; color:#16203A; margin:0 0 8px;">Member portal</h1>
+        <p id="auth-blurb" style="font-size:15.5px; line-height:1.55; color:#51607c; margin:0;">Sign in to access chapter documents, the member directory, dues, and more.</p>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <form id="login-form">
+        <div style="margin-bottom:18px;">
+          <label class="flbl">Email</label>
+          <input class="fld" type="email" id="login-email" placeholder="you@email.com" autocomplete="username" required>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label class="flbl">Password</label>
+          <input class="fld" type="password" id="login-password" placeholder="Password" autocomplete="current-password" required>
+        </div>
+        <div id="login-error" style="display:none; background:#fdecec; color:#b03333; font-size:14px; font-weight:600; padding:11px 14px; border-radius:9px; margin-bottom:16px; line-height:1.45;"></div>
+        <button type="submit" class="cta-primary" style="width:100%; padding:15px; font-size:16px;">Sign in</button>
+      </form>
+
+      <!-- SIGNUP FORM -->
+      <form id="signup-form" hidden>
+        <div style="margin-bottom:18px;">
+          <label class="flbl">Full name</label>
+          <input class="fld" type="text" id="signup-name" placeholder="Jane Aviator" autocomplete="name" required>
+        </div>
+        <div style="margin-bottom:18px;">
+          <label class="flbl">Email</label>
+          <input class="fld" type="email" id="signup-email" placeholder="you@email.com" autocomplete="email" required>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label class="flbl">Password <span style="font-weight:500; color:#8593aa;">(at least 8 characters)</span></label>
+          <input class="fld" type="password" id="signup-password" placeholder="Choose a password" autocomplete="new-password" required minlength="8">
+        </div>
+        <div id="signup-error" style="display:none; background:#fdecec; color:#b03333; font-size:14px; font-weight:600; padding:11px 14px; border-radius:9px; margin-bottom:16px; line-height:1.45;"></div>
+        <button type="submit" class="cta-primary" style="width:100%; padding:15px; font-size:16px;">Create account</button>
+      </form>
+
+      <!-- SIGNUP DONE / PENDING -->
+      <div id="signup-done" hidden style="text-align:center; padding:8px 0;">
+        <div style="width:56px; height:56px; border-radius:50%; background:#E3F1ED; color:#0E7C66; display:flex; align-items:center; justify-content:center; font-size:26px; margin:0 auto 16px;">✓</div>
+        <h3 style="font-family:'Archivo',sans-serif; font-weight:800; font-size:21px; color:#16203A; margin:0 0 8px;">Account created</h3>
+        <p style="font-size:15px; line-height:1.6; color:#51607c; margin:0;">A chapter administrator will verify your membership. Once approved, you'll be able to sign in here.</p>
+      </div>
+
+      <div style="margin-top:20px; padding-top:18px; border-top:1px solid #eef1f6; text-align:center;">
+        <div id="auth-switch" style="font-size:14px; color:#51607c;">Not a member yet? <a href="#" id="show-signup" style="color:#0A5BC4; font-weight:700; text-decoration:none;">Create an account →</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DASHBOARD ============ -->
+<div id="dashboard" hidden>
+  <!-- member top bar -->
+  <div style="background:#042A5C; color:#fff;">
+    <div class="pad-section" style="max-width:1180px; margin:0 auto; padding:22px 40px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+      <div>
+        <div style="font-family:'Archivo',sans-serif; font-weight:700; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#7fa3d6;">Member portal</div>
+        <div style="font-family:'Archivo',sans-serif; font-weight:800; font-size:24px; color:#fff;">Welcome back, <span id="member-name"></span></div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <a id="admin-link" href="admin/" hidden style="background:#0A5BC4; color:#fff; padding:11px 20px; border-radius:10px; font-weight:700; font-size:15px; text-decoration:none;">Admin portal</a>
+        <button id="logout-btn" style="background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25); padding:11px 20px; border-radius:10px; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit;">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="g2 pad-section" style="max-width:1180px; margin:0 auto; padding:36px 40px 80px; display:grid; grid-template-columns:248px 1fr; gap:36px; align-items:start;">
+    <!-- sidebar -->
+    <nav id="portal-nav" style="position:sticky; top:20px; display:flex; flex-direction:column; gap:6px; background:#fff; border:1px solid #e7ecf3; border-radius:16px; padding:14px;">
+      <button class="side-btn active" data-tab="overview">Overview</button>
+      <button class="side-btn" data-tab="docs">Documents &amp; minutes</button>
+      <button class="side-btn" data-tab="directory">Member directory</button>
+      <button class="side-btn" data-tab="dues">Dues &amp; membership</button>
+      <button class="side-btn" data-tab="news">Members' newsletters</button>
+      <button class="side-btn" data-tab="calendar">Calendar &amp; RSVP</button>
+    </nav>
+
+    <!-- content panes (filled by js/members.js) -->
+    <div>
+      <div id="tab-overview"></div>
+      <div id="tab-docs" hidden></div>
+      <div id="tab-directory" hidden></div>
+      <div id="tab-dues" hidden></div>
+      <div id="tab-news" hidden></div>
+      <div id="tab-calendar" hidden></div>
+    </div>
+  </section>
+</div>
+
+<footer class="site-footer">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brandrow">
+        <div class="footer-badge">283</div>
+        <div class="footer-title">EAA Chapter 283</div>
+      </div>
+      <p class="footer-blurb">A community of aviators, builders, and enthusiasts based at Cherry Ridge Airport in Honesdale, PA.</p>
+      <div style="display:flex; gap:10px;">
+        <a href="#" class="footer-social">Instagram</a>
+        <a href="#" class="footer-social">Facebook</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-head">Explore</div>
+      <a href="about.html" class="flink">About</a><br>
+      <a href="events.html" class="flink">Events</a><br>
+      <a href="news.html" class="flink">News &amp; Announcements</a><br>
+      <a href="koala.html" class="flink">The Koala</a>
+    </div>
+    <div>
+      <div class="footer-head">Connect</div>
+      <a href="location.html" class="flink">Location</a><br>
+      <a href="faq.html" class="flink">FAQ</a><br>
+      <a href="contact.html" class="flink">Contact</a><br>
+      <a href="members.html" class="flink">Member Login</a>
+    </div>
+    <div>
+      <div class="footer-head">Find us</div>
+      <div style="font-size:15px; line-height:1.7; color:#b9cdea;">Cherry Ridge Airport<br>30 Bomber Lane<br>Honesdale, PA 18431</div>
+      <a href="mailto:EAAchapter283@gmail.com" class="flink" style="display:inline-block; margin-top:10px;">EAAchapter283@gmail.com</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 EAA Chapter 283. All rights reserved.</span>
+    <span>Experimental Aircraft Association · Chapter 283</span>
+  </div>
+</footer>
+
+</body>
+</html>

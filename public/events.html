@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events — EAA Chapter 283</title>
+<meta name="description" content="Chapter meetings, Young Eagles flight days, fly-ins, and more at Cherry Ridge Airport in Honesdale, PA.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A5BC4'/%3E%3Ctext x='32' y='42' font-family='Arial,sans-serif' font-weight='900' font-size='26' fill='%23fff' text-anchor='middle'%3E283%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script src="js/site.js" defer></script>
+<script src="js/events.js" defer></script>
+</head>
+<body>
+
+<header>
+  <div id="announce-bar" class="announce-bar" hidden>
+    <span></span>
+    <button aria-label="Dismiss announcement">✕</button>
+  </div>
+  <div class="nav-bar">
+    <a href="index.html" class="brand">
+      <div class="brand-badge">283</div>
+      <div class="brand-name">EAA Chapter 283</div>
+    </a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false">☰</button>
+    <nav class="site-nav" id="site-nav">
+      <a href="about.html" class="navlink">About</a>
+      <a href="events.html" class="navlink active">Events</a>
+      <a href="news.html" class="navlink">News</a>
+      <a href="koala.html" class="navlink">Koala</a>
+      <a href="location.html" class="navlink">Location</a>
+      <a href="faq.html" class="navlink">FAQ</a>
+      <a href="contact.html" class="navlink">Contact</a>
+      <a href="members.html" class="nav-cta">Member Login</a>
+    </nav>
+  </div>
+</header>
+
+<!-- PAGE HERO -->
+<section style="background:#F6F8FC; border-bottom:1px solid #eef1f6;">
+  <div class="pad-section" style="max-width:1180px; margin:0 auto; padding:56px 40px 48px;">
+    <div style="font-family:'Archivo',sans-serif; font-weight:700; font-size:13px; letter-spacing:0.16em; text-transform:uppercase; color:#0A5BC4; margin-bottom:14px;">What's happening</div>
+    <h1 style="font-family:'Archivo',sans-serif; font-weight:900; font-size:48px; line-height:1.05; letter-spacing:-0.025em; color:#16203A; margin:0 0 16px;">Events &amp; meetings</h1>
+    <p style="font-size:18px; line-height:1.6; color:#51607c; margin:0; max-width:600px;">Click any event on the calendar to see the details. Everyone is welcome — members and visitors alike.</p>
+  </div>
+</section>
+
+<!-- CALENDAR + DETAIL -->
+<section class="pad-section" style="max-width:1180px; margin:0 auto; padding:48px 40px 30px;">
+  <!-- legend -->
+  <div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:24px;">
+    <div style="display:flex; align-items:center; gap:8px; font-size:14px; color:#51607c; font-weight:600;"><span style="width:12px; height:12px; border-radius:4px; background:#0A5BC4; display:inline-block;"></span>Chapter Meeting</div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:14px; color:#51607c; font-weight:600;"><span style="width:12px; height:12px; border-radius:4px; background:#0E7C66; display:inline-block;"></span>Young Eagles</div>
+    <div style="display:flex; align-items:center; gap:8px; font-size:14px; color:#51607c; font-weight:600;"><span style="width:12px; height:12px; border-radius:4px; background:#C77A12; display:inline-block;"></span>Fly-In</div>
+  </div>
+
+  <div class="g2" style="display:grid; grid-template-columns:1.55fr 1fr; gap:28px; align-items:start;">
+    <!-- CALENDAR -->
+    <div style="border:1px solid #e7ecf3; border-radius:16px; overflow:hidden;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px;">
+        <h2 id="cal-title" style="font-family:'Archivo',sans-serif; font-weight:800; font-size:24px; color:#16203A; margin:0;">&nbsp;</h2>
+        <div style="display:flex; gap:10px;">
+          <button class="navbtn" id="cal-prev" aria-label="Previous month">‹</button>
+          <button class="navbtn" id="cal-next" aria-label="Next month">›</button>
+        </div>
+      </div>
+      <div class="cal-scroll">
+        <div class="cal-min">
+          <div style="display:grid; grid-template-columns:repeat(7,1fr); background:#F6F8FC; border-top:1px solid #eef1f6; border-bottom:1px solid #eef1f6;">
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">SUN</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">MON</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">TUE</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">WED</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">THU</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">FRI</div>
+            <div style="padding:10px 8px; font-size:12px; font-weight:700; letter-spacing:0.06em; color:#8593aa; text-align:center;">SAT</div>
+          </div>
+          <div id="cal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL -->
+    <div id="event-detail"></div>
+  </div>
+</section>
+
+<!-- ALL UPCOMING -->
+<section class="pad-section" style="max-width:1180px; margin:0 auto; padding:24px 40px 90px;">
+  <h2 style="font-family:'Archivo',sans-serif; font-weight:800; font-size:24px; color:#16203A; margin:0 0 20px;">All upcoming events</h2>
+  <div id="upcoming-list" style="border:1px solid #e7ecf3; border-radius:16px; overflow:hidden;"></div>
+</section>
+
+<footer class="site-footer">
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brandrow">
+        <div class="footer-badge">283</div>
+        <div class="footer-title">EAA Chapter 283</div>
+      </div>
+      <p class="footer-blurb">A community of aviators, builders, and enthusiasts based at Cherry Ridge Airport in Honesdale, PA.</p>
+      <div style="display:flex; gap:10px;">
+        <a href="#" class="footer-social">Instagram</a>
+        <a href="#" class="footer-social">Facebook</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-head">Explore</div>
+      <a href="about.html" class="flink">About</a><br>
+      <a href="events.html" class="flink">Events</a><br>
+      <a href="news.html" class="flink">News &amp; Announcements</a><br>
+      <a href="koala.html" class="flink">The Koala</a>
+    </div>
+    <div>
+      <div class="footer-head">Connect</div>
+      <a href="location.html" class="flink">Location</a><br>
+      <a href="faq.html" class="flink">FAQ</a><br>
+      <a href="contact.html" class="flink">Contact</a><br>
+      <a href="members.html" class="flink">Member Login</a>
+    </div>
+    <div>
+      <div class="footer-head">Find us</div>
+      <div style="font-size:15px; line-height:1.7; color:#b9cdea;">Cherry Ridge Airport<br>30 Bomber Lane<br>Honesdale, PA 18431</div>
+      <a href="mailto:EAAchapter283@gmail.com" class="flink" style="display:inline-block; margin-top:10px;">EAAchapter283@gmail.com</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 EAA Chapter 283. All rights reserved.</span>
+    <span>Experimental Aircraft Association · Chapter 283</span>
+  </div>
+</footer>
+
+</body>
+</html>

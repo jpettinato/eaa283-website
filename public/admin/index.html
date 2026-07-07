@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — EAA Chapter 283</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23042A5C'/%3E%3Ctext x='32' y='42' font-family='Arial,sans-serif' font-weight='900' font-size='26' fill='%23fff' text-anchor='middle'%3E283%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #F0F3F8; font-family: 'Public Sans', sans-serif; color: #16203A; }
+  h1, h2, h3 { font-family: 'Archivo', sans-serif; letter-spacing: -0.02em; }
+  .topbar { background: #042A5C; color: #fff; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .topbar .brand { display: flex; align-items: center; gap: 12px; }
+  .badge { width: 38px; height: 38px; border-radius: 9px; background: #0A5BC4; display: flex; align-items: center; justify-content: center; color: #fff; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 14px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 80px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .tab-btn { border: 1px solid #d9e0ea; background: #fff; color: #3a4761; font-family: inherit; font-size: 15px; font-weight: 600; padding: 10px 18px; border-radius: 10px; cursor: pointer; }
+  .tab-btn.active { background: #0A5BC4; border-color: #0A5BC4; color: #fff; font-weight: 700; }
+  .card { background: #fff; border: 1px solid #e2e8f1; border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+  .card h3 { margin: 0 0 16px; font-size: 19px; }
+  .fld { width: 100%; font-family: inherit; font-size: 15px; padding: 11px 13px; border: 1.5px solid #d9e0ea; border-radius: 9px; color: #16203A; background: #fff; }
+  .fld:focus { outline: none; border-color: #0A5BC4; box-shadow: 0 0 0 3px rgba(10,91,196,.14); }
+  .flbl { display: block; font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+  .frow { display: grid; gap: 14px; margin-bottom: 14px; }
+  .btn { background: #0A5BC4; color: #fff; border: none; font-family: inherit; font-size: 15px; font-weight: 700; padding: 11px 20px; border-radius: 9px; cursor: pointer; }
+  .btn:hover { background: #06408C; }
+  .btn.ghost { background: #fff; color: #0A5BC4; border: 1.5px solid #0A5BC4; }
+  .btn.danger { background: #fff; color: #b03333; border: 1.5px solid #e3b6b6; }
+  .btn.small { font-size: 13.5px; padding: 7px 13px; }
+  .btn:disabled { opacity: .55; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th { text-align: left; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #8593aa; padding: 8px 10px; border-bottom: 1px solid #e2e8f1; }
+  td { padding: 10px; border-bottom: 1px solid #eef1f6; vertical-align: middle; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 30px; }
+  .pill.pending { background: #FDF3E3; color: #C77A12; }
+  .pill.active { background: #E3F1ED; color: #0E7C66; }
+  .pill.disabled { background: #fdecec; color: #b03333; }
+  .pill.blue { background: #EAF1FB; color: #0A5BC4; }
+  .msg { padding: 11px 14px; border-radius: 9px; font-size: 14px; font-weight: 600; margin-bottom: 14px; display: none; }
+  .msg.err { background: #fdecec; color: #b03333; }
+  .msg.ok { background: #E3F1ED; color: #0E7C66; }
+  .scroll-x { overflow-x: auto; }
+  .muted { color: #8593aa; font-size: 14px; }
+  @media (max-width: 700px) { .frow.cols { grid-template-columns: 1fr !important; } }
+</style>
+<script src="../js/site.js" defer></script>
+<script src="../js/admin.js" defer></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="badge">283</div>
+    <div style="font-family:'Archivo',sans-serif; font-weight:800; font-size:18px;">EAA Chapter 283 — Admin Portal</div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <a href="../index.html" style="color:#9cc2f2; font-weight:600; font-size:14.5px; text-decoration:none;">← Public site</a>
+    <button id="logout-btn" hidden class="btn ghost" style="background:transparent; color:#fff; border-color:rgba(255,255,255,.4);">Log out</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="admin-login" class="wrap" style="max-width:440px;">
+  <div class="card" style="margin-top:40px;">
+    <h2 style="margin:0 0 6px; font-size:24px;">Admin sign in</h2>
+    <p class="muted" style="margin:0 0 18px;">Sign in with an administrator account.</p>
+    <form id="login-form">
+      <div class="frow"><div><label class="flbl">Email</label><input class="fld" type="email" id="login-email" required autocomplete="username"></div></div>
+      <div class="frow"><div><label class="flbl">Password</label><input class="fld" type="password" id="login-password" required autocomplete="current-password"></div></div>
+      <div id="login-error" class="msg err"></div>
+      <button class="btn" type="submit" style="width:100%;">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="admin-app" class="wrap" hidden>
+  <div class="tabs" id="admin-tabs">
+    <button class="tab-btn active" data-tab="banner">Announcement bar</button>
+    <button class="tab-btn" data-tab="events">Events</button>
+    <button class="tab-btn" data-tab="posts">News posts</button>
+    <button class="tab-btn" data-tab="documents">Documents</button>
+    <button class="tab-btn" data-tab="members">Members</button>
+    <button class="tab-btn" data-tab="subscribers">Subscribers</button>
+  </div>
+  <div id="tab-banner"></div>
+  <div id="tab-events" hidden></div>
+  <div id="tab-posts" hidden></div>
+  <div id="tab-documents" hidden></div>
+  <div id="tab-members" hidden></div>
+  <div id="tab-subscribers" hidden></div>
+</div>
+
+</body>
+</html>
