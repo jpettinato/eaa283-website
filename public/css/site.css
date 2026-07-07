@@ -6,6 +6,10 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #fff; font-family: 'Public Sans', sans-serif; }
 
+/* The hidden attribute must always win, even over display:flex classes/inline styles
+   (login/dashboard toggling on members.html, the announcement bar, etc.). */
+[hidden] { display: none !important; }
+
 /* ============ ANNOUNCEMENT BAR ============ */
 .announce-bar {
   background: #042A5C; color: #dce8fb; padding: 11px 56px;
