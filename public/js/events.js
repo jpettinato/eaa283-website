@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     EVENTS = await api('/api/events');
   } catch (e) {
     calBody.innerHTML = '<div style="padding:24px; color:#8593aa;">Calendar unavailable — please try again later.</div>';
+    detail.innerHTML = '';
+    upcoming.innerHTML = '<div style="padding:24px; color:#8593aa; background:#fff;">Calendar unavailable — please try again later.</div>';
     return;
   }
   EVENTS.sort((a, b) => a.date.localeCompare(b.date));
@@ -129,4 +131,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   render();
+  // Ease the freshly-rendered content in over the skeletons (first paint only).
+  calBody.classList.add('fade-in');
+  detail.classList.add('fade-in');
+  upcoming.classList.add('fade-in');
 });

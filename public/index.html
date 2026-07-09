@@ -128,7 +128,15 @@
       </div>
       <a href="events.html" class="link-arrow">View full calendar →</a>
     </div>
-    <div id="next-event"></div>
+    <div id="next-event">
+      <div style="display:flex; gap:26px; align-items:center; background:#fff; border:1px solid #d9e4f5; border-radius:18px; padding:28px 32px;">
+        <div class="skeleton" style="width:90px; height:96px; border-radius:14px;"></div>
+        <div style="flex:1;">
+          <div class="skeleton" style="height:24px; max-width:320px; margin-bottom:12px;"></div>
+          <div class="skeleton" style="height:16px; max-width:420px;"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -154,8 +162,8 @@
       </div>
       <p class="footer-blurb">A community of aviators, builders, and enthusiasts based at Cherry Ridge Airport in Honesdale, PA.</p>
       <div style="display:flex; gap:10px;">
-        <a href="#" class="footer-social">Instagram</a>
-        <a href="#" class="footer-social">Facebook</a>
+        <a href="https://www.instagram.com/eaa.chapter283" target="_blank" rel="noopener" class="footer-social"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"></rect><circle cx="12" cy="12" r="4.5"></circle><circle cx="17.6" cy="6.4" r="1.4" fill="currentColor" stroke="none"></circle></svg>Instagram</a>
+        <a href="https://www.facebook.com/people/EAA-Chapter-283" target="_blank" rel="noopener" class="footer-social"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.4 21.9v-7.2h2.7l.5-3.1h-3.2V9.3c0-.9.3-1.6 1.7-1.6h1.6V4.9c-.5-.1-1.4-.2-2.4-.2-2.4 0-4 1.5-4 4.1v2.8H7.6v3.1h2.7v7.2h3.1z"></path></svg>Facebook</a>
       </div>
     </div>
     <div>
@@ -204,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
       (next.start_time ? ' · ' + next.start_time + (next.end_time ? ' – ' + next.end_time : '') : '') +
       ' · ' + next.location;
     box.innerHTML =
-      '<a href="events.html" style="text-decoration:none; display:flex; gap:26px; align-items:center; background:#fff; border:1px solid #d9e4f5; border-radius:18px; padding:28px 32px; flex-wrap:wrap;">' +
+      '<a href="events.html" class="fade-in" style="text-decoration:none; display:flex; gap:26px; align-items:center; background:#fff; border:1px solid #d9e4f5; border-radius:18px; padding:28px 32px; flex-wrap:wrap;">' +
         '<div style="background:#0A5BC4; color:#fff; border-radius:14px; text-align:center; padding:16px 22px; min-width:90px;">' +
           '<div style="font-size:13px; font-weight:600; letter-spacing:0.1em;">' + mon + '</div>' +
           '<div style="font-family:\'Archivo\',sans-serif; font-weight:900; font-size:40px; line-height:1;">' + d.getDate() + '</div>' +

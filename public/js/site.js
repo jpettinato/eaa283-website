@@ -53,10 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
       try { dismissedKey = localStorage.getItem('eaa283_ann_dismissed'); } catch (e) {}
       if (dismissedKey === b.updated_at) return;
       bar.querySelector('span').textContent = b.text;
+      // Slide open smoothly rather than shoving the page down.
+      bar.classList.add('announce-anim');
       bar.hidden = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => bar.classList.add('show')));
       bar.querySelector('button').addEventListener('click', () => {
         try { localStorage.setItem('eaa283_ann_dismissed', b.updated_at); } catch (e) {}
-        bar.hidden = true;
+        bar.classList.remove('show');
+        setTimeout(() => { bar.hidden = true; }, 350);
       });
     }).catch(() => { /* API unavailable (e.g. static preview) — no banner */ });
   }

@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     posts = posts || [];
     if (!posts.length) {
       featured.innerHTML = '<div style="border:1px solid #e7ecf3; border-radius:16px; padding:40px; color:#8593aa;">No news yet — check back soon.</div>';
+      recent.innerHTML = '';
+      featured.classList.add('fade-in');
       return;
     }
     const [first, ...rest] = posts;
@@ -46,8 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>' +
       '</div>'
     ).join('');
+    featured.classList.add('fade-in');
+    recent.classList.add('fade-in');
   }).catch(() => {
     featured.innerHTML = '<div style="border:1px solid #e7ecf3; border-radius:16px; padding:40px; color:#8593aa;">News is unavailable right now — please try again later.</div>';
+    recent.innerHTML = '';
   });
 
   // Public newsletter archive (documents uploaded in the admin portal, category "newsletter", public)
@@ -56,8 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
     docs = docs || [];
     if (!docs.length) {
       nlList.innerHTML = '<div style="padding:24px; color:#8593aa;">No public newsletters posted yet.</div>';
+      nlList.classList.add('fade-in');
       return;
     }
+    nlList.classList.add('fade-in');
     nlList.innerHTML = docs.map((d) =>
       '<a href="/api/documents/' + d.id + '" class="nl-row" style="display:flex; align-items:center; gap:20px; padding:20px 24px; border-bottom:1px solid #eef1f6; background:#fff;">' +
         '<div style="width:44px; height:54px; border-radius:7px; background:#EAF1FB; color:#0A5BC4; display:flex; align-items:center; justify-content:center; font-family:\'Archivo\',sans-serif; font-weight:900; font-size:12px; flex-shrink:0;">PDF</div>' +

@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const h2 = (t) => '<h2 style="font-family:\'Archivo\',sans-serif; font-weight:800; font-size:30px; letter-spacing:-0.02em; color:#16203A; margin:0 0 8px;">' + t + '</h2>';
   const sub = (t) => '<p style="font-size:16px; color:#51607c; margin:0 0 24px;">' + t + '</p>';
   const empty = (t) => '<div style="padding:24px; color:#8593aa; background:#fff; border:1px solid #e7ecf3; border-radius:16px;">' + t + '</div>';
+  const skelRows = (n, h) => Array.from({ length: n }, () =>
+    '<div class="skeleton" style="height:' + (h || 68) + 'px; margin-bottom:12px;"></div>').join('');
+  const fadeWrap = (html) => '<div class="fade-in">' + html + '</div>';
 
   const docRow = (d, extraMeta) =>
     '<a href="/api/documents/' + d.id + '" class="doc-row" style="display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid #eef1f6; background:#fff;">' +
@@ -87,8 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
     authSection.hidden = false;
   });
 
-  // Already signed in? Straight to the dashboard.
-  api('/api/me').then((u) => { me = u; openDashboard(); }).catch(() => {});
+  // Gatekeeper: nothing shows until we know whether the visitor is signed in,
+  // so a returning member never sees the login card flash before the dashboard.
+  const portalLoading = document.getElementById('portal-loading');
+  api('/api/me')
+    .then((u) => { me = u; openDashboard(); })
+    .catch(() => { authSection.hidden = false; })
+    .finally(() => { portalLoading.hidden = true; });
 
   // ---------- dashboard ----------
 
@@ -116,7 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function renderOverview() {
     const pane = H('tab-overview');
-    pane.innerHTML = h2('Overview');
+    pane.innerHTML = h2('Overview') +
+      '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:20px;">' +
+      '<div class="skeleton" style="height:120px;"></div><div class="skeleton" style="height:120px;"></div></div>' +
+      '<div class="skeleton" style="height:190px;"></div>';
     const year = new Date().getFullYear();
     const [dues, events, docs] = await Promise.all([
       api('/api/member/dues').catch(() => []),
@@ -133,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
           '<div style="font-size:15px; color:#51607c;">Active through Dec 31, ' + year + '</div></div>'
       : '<div style="background:#FDF3E3; border-radius:16px; padding:26px;">' +
           '<div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#C77A12; margin-bottom:8px;">Your dues</div>' +
-          '<div style="font-family:\'Archivo\',sans-serif; font-weight:900; font-size:26px; color:#16203A; margin-bottom:4px;">' + year + ' dues open</div>' +
+          '<div style="font-family:\'Archivo\',sans-serif; font-weight:900; font-size:26px; color:#16203A; margin-bottom:4px;">' + year + ' dues not paid</div>' +
           '<div style="font-size:15px; color:#51607c;">See the Dues tab for details</div></div>';
 
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -163,28 +174,31 @@ document.addEventListener('DOMContentLoaded', () => {
           : '<div style="color:#8593aa; font-size:15px;">No documents posted yet.</div>') +
       '</div>';
 
-    pane.innerHTML = h2('Overview') +
-      '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:20px;">' + duesCard + nextCard + '</div>' + docsBox;
+    pane.innerHTML = h2('Overview') + fadeWrap(
+      '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:20px;">' + duesCard + nextCard + '</div>' + docsBox);
   }
 
   async function renderDocs() {
     const pane = H('tab-docs');
-    pane.innerHTML = h2('Documents &amp; minutes') + sub('Meeting minutes, agendas, bylaws, and chapter reference materials.');
+    const head = h2('Documents &amp; minutes') + sub('Meeting minutes, agendas, bylaws, and chapter reference materials.');
+    pane.innerHTML = head + skelRows(4);
     const docs = await api('/api/member/documents').catch(() => []);
-    pane.innerHTML = h2('Documents &amp; minutes') + sub('Meeting minutes, agendas, bylaws, and chapter reference materials.') +
-      (docs.length
-        ? '<div style="border:1px solid #e7ecf3; border-radius:16px; overflow:hidden;">' +
-            docs.map((d) => docRow(d, (CAT_LABEL[d.category] || 'Document') + ' · Posted ' + fmtDate(d.posted_at))).join('') + '</div>'
-        : empty('No documents have been uploaded yet.'));
+    pane.innerHTML = head + fadeWrap(docs.length
+      ? '<div style="border:1px solid #e7ecf3; border-radius:16px; overflow:hidden;">' +
+          docs.map((d) => docRow(d, (CAT_LABEL[d.category] || 'Document') + ' · Posted ' + fmtDate(d.posted_at))).join('') + '</div>'
+      : empty('No documents have been uploaded yet.'));
   }
 
   async function renderDirectory() {
     const pane = H('tab-directory');
-    pane.innerHTML = h2('Member directory') + sub('Chapter members and officers. Please keep contact details within the chapter.');
+    const head = h2('Member directory') + sub('Chapter members and officers. Please keep contact details within the chapter.');
+    pane.innerHTML = head +
+      '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:16px;">' +
+      '<div class="skeleton" style="height:88px;"></div><div class="skeleton" style="height:88px;"></div>' +
+      '<div class="skeleton" style="height:88px;"></div><div class="skeleton" style="height:88px;"></div></div>';
     const members = await api('/api/member/directory').catch(() => []);
     const initials = (n) => n.split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase();
-    pane.innerHTML = h2('Member directory') + sub('Chapter members and officers. Please keep contact details within the chapter.') +
-      (members.length
+    pane.innerHTML = head + fadeWrap(members.length
         ? '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:16px;">' + members.map((m) =>
             '<div style="display:flex; align-items:center; gap:16px; background:#fff; border:1px solid #e7ecf3; border-radius:14px; padding:18px 20px;">' +
               '<div style="width:50px; height:50px; border-radius:50%; background:#EAF1FB; color:#0A5BC4; display:flex; align-items:center; justify-content:center; font-family:\'Archivo\',sans-serif; font-weight:900; font-size:17px; flex-shrink:0;">' + initials(m.name) + '</div>' +
@@ -199,7 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function renderDues() {
     const pane = H('tab-dues');
-    pane.innerHTML = h2('Dues &amp; membership') + sub('Annual chapter dues are $50 for members 18 and over. Minors are exempt.');
+    const head = h2('Dues &amp; membership') + sub('Annual chapter dues are $50 for members 18 and over. Minors are exempt.');
+    pane.innerHTML = head + '<div class="skeleton" style="height:130px; margin-bottom:24px;"></div>' + skelRows(2, 54);
     const dues = await api('/api/member/dues').catch(() => []);
     const year = new Date().getFullYear();
     const cur = dues.find((d) => d.year === year);
@@ -214,13 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>'
       : '<div style="background:#FDF3E3; border:1px solid #f0ddba; border-radius:16px; padding:30px; margin-bottom:24px;">' +
           '<div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#C77A12; margin-bottom:6px;">Current status</div>' +
-          '<div style="font-family:\'Archivo\',sans-serif; font-weight:900; font-size:28px; color:#16203A; margin-bottom:4px;">' + year + ' dues not yet recorded</div>' +
+          '<div style="font-family:\'Archivo\',sans-serif; font-weight:900; font-size:28px; color:#16203A; margin-bottom:4px;">' + year + ' dues not paid</div>' +
           '<div style="font-size:15px; color:#51607c;">Dues can be paid at any chapter meeting or by mail. A chapter officer will update your status once received.</div>' +
         '</div>';
 
     const history = dues.filter((d) => d.paid_date || d.status !== 'unpaid');
-    pane.innerHTML = h2('Dues &amp; membership') + sub('Annual chapter dues are $50 for members 18 and over. Minors are exempt.') +
-      statusCard +
+    pane.innerHTML = head + fadeWrap(statusCard +
       '<h3 style="font-family:\'Archivo\',sans-serif; font-weight:800; font-size:19px; color:#16203A; margin:0 0 14px;">Payment history</h3>' +
       (history.length
         ? '<div style="border:1px solid #e7ecf3; border-radius:16px; overflow:hidden;">' + history.map((d) =>
@@ -228,14 +242,14 @@ document.addEventListener('DOMContentLoaded', () => {
               '<div style="font-weight:700; color:#16203A;">' + d.year + ' Annual Dues</div>' +
               '<div style="color:#51607c;">' + (d.status === 'paid' ? 'Paid' + (d.paid_date ? ' ' + fmtDate(d.paid_date) : '') + ' · $50.00' : d.status.charAt(0).toUpperCase() + d.status.slice(1)) + '</div>' +
             '</div>').join('') + '</div>'
-        : empty('No payment history on record yet.'));
+        : empty('No payment history on record yet.')));
   }
 
   async function renderNews() {
     const pane = H('tab-news');
     const head = h2("Members' newsletters") +
       sub('Member-only bulletins and updates not published publicly. (Public news is on the <a href="news.html" style="color:#0A5BC4; font-weight:600;">News page</a>.)');
-    pane.innerHTML = head;
+    pane.innerHTML = head + skelRows(3, 96);
     const [posts, docs] = await Promise.all([
       api('/api/member/posts').catch(() => []),
       api('/api/member/documents').catch(() => []),
@@ -256,17 +270,17 @@ document.addEventListener('DOMContentLoaded', () => {
         bulletins.map((d) => docRow(d, 'Posted ' + fmtDate(d.posted_at))).join('') + '</div>';
     }
     if (!posts.length && !bulletins.length) html += empty('No member newsletters posted yet.');
-    pane.innerHTML = html;
+    pane.innerHTML = head + fadeWrap(html.slice(head.length));
   }
 
   async function renderCalendar() {
     const pane = H('tab-calendar');
     const head = h2('Calendar &amp; RSVP') + sub("Upcoming chapter events, including members-only gatherings. Let us know if you're coming.");
-    pane.innerHTML = head;
+    pane.innerHTML = head + skelRows(3, 96);
     const events = await api('/api/member/events').catch(() => []);
     const todayStr = new Date().toISOString().slice(0, 10);
     const ups = events.filter((e) => e.date >= todayStr);
-    pane.innerHTML = head + (ups.length
+    pane.innerHTML = head + fadeWrap(ups.length
       ? '<div style="display:flex; flex-direction:column; gap:14px;">' + ups.map((e) => {
           const going = !!e.going;
           const btnStyle = going

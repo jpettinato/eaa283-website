@@ -10,6 +10,44 @@ body { margin: 0; background: #fff; font-family: 'Public Sans', sans-serif; }
    (login/dashboard toggling on members.html, the announcement bar, etc.). */
 [hidden] { display: none !important; }
 
+/* ============ LOADING STATES ============ */
+/* Shimmering placeholder shown while API content loads. */
+.skeleton { position: relative; overflow: hidden; background: #e9eef5; border-radius: 10px; }
+.skeleton::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-sweep { 100% { transform: translateX(100%); } }
+
+/* Content that replaces a skeleton eases in instead of popping. */
+.fade-in { animation: fade-in .35s ease both; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.spinner {
+  width: 36px; height: 36px; border-radius: 50%; margin: 0 auto;
+  border: 3.5px solid #cfdcf0; border-top-color: #0A5BC4;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after, .fade-in { animation: none; }
+  .fade-in { opacity: 1; transform: none; }
+}
+
+/* Announcement bar slides open/closed instead of popping into layout.
+   (Applied by js/site.js; padding collapses with the bar so no strip remains.) */
+.announce-anim {
+  overflow: hidden; max-height: 0; opacity: 0;
+  padding-top: 0 !important; padding-bottom: 0 !important;
+  transition: max-height .35s ease, opacity .3s ease, padding .35s ease;
+}
+.announce-anim.show {
+  max-height: 120px; opacity: 1;
+  padding-top: 11px !important; padding-bottom: 11px !important;
+}
+
 /* ============ ANNOUNCEMENT BAR ============ */
 .announce-bar {
   background: #042A5C; color: #dce8fb; padding: 11px 56px;
@@ -66,7 +104,8 @@ body { margin: 0; background: #fff; font-family: 'Public Sans', sans-serif; }
 }
 .footer-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 21px; color: #fff; }
 .footer-blurb { font-size: 15.5px; line-height: 1.7; color: #9fb8de; margin: 0 0 18px; max-width: 320px; }
-.footer-social { font-size: 14px; font-weight: 600; color: #cdddf6; text-decoration: none; border: 1px solid rgba(255,255,255,.22); padding: 8px 14px; border-radius: 8px; }
+.footer-social { font-size: 14px; font-weight: 600; color: #cdddf6; text-decoration: none; border: 1px solid rgba(255,255,255,.22); padding: 8px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; }
+.footer-social:hover { color: #fff; border-color: rgba(255,255,255,.45); }
 .footer-head { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #7fa3d6; margin-bottom: 12px; }
 .flink { color: #b9cdea; text-decoration: none; font-size: 15px; line-height: 2.0; transition: color .15s; }
 .flink:hover { color: #fff; }
