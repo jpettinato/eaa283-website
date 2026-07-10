@@ -30,6 +30,8 @@ async function hashPassword(password, saltHex) {
   return bytesToHex(new Uint8Array(bits));
 }
 
+const normalizeAnswer = (a) => String(a).trim().toLowerCase();
+
 function timingSafeEqual(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -86,7 +88,7 @@ export async function onRequest(context) {
 
     if (path === 'events' && method === 'GET') {
       const { results } = await env.DB.prepare(
-        'SELECT id, title, date, start_time, end_time, location, kind, description FROM events WHERE members_only = 0 ORDER BY date').all();
+        'SELECT id, title, date, start_time, end_time, location, kind, description FROM events WHERE members_only = 0 AND group_id IS NULL ORDER BY date').all();
       return json(results);
     }
 
@@ -109,18 +111,30 @@ export async function onRequest(context) {
       return json({ ok: true });
     }
 
+    if (path === 'unsubscribe' && method === 'POST') {
+      const { email } = await readBody(request);
+      if (!isValidEmail(email)) return err('Please enter a valid email address.');
+      await env.DB.prepare('DELETE FROM subscribers WHERE email = ?').bind(email.trim()).run();
+      return json({ ok: true });
+    }
+
     if (path === 'signup' && method === 'POST') {
-      const { name, email, password } = await readBody(request);
+      const { name, email, password, security_question, security_answer } = await readBody(request);
       if (!name || String(name).trim().length < 2) return err('Please enter your full name.');
       if (!isValidEmail(email)) return err('Please enter a valid email address.');
       if (!password || String(password).length < 8) return err('Password must be at least 8 characters.');
+      if (!security_question || !String(security_question).trim()) return err('Choose a security question — it lets you reset your password later without emailing an admin.');
+      if (!security_answer || !String(security_answer).trim()) return err('Provide an answer to your security question.');
       const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email.trim()).first();
       if (existing) return err('An account with that email already exists.', 409);
       const salt = randomHex(16);
       const hash = await hashPassword(String(password), salt);
+      const answerSalt = randomHex(16);
+      const answerHash = await hashPassword(normalizeAnswer(security_answer), answerSalt);
       await env.DB.prepare(
-        "INSERT INTO users (email, name, password_hash, salt, role, status) VALUES (?, ?, ?, ?, 'member', 'pending')")
-        .bind(email.trim(), String(name).trim(), hash, salt).run();
+        `INSERT INTO users (email, name, password_hash, salt, role, status, security_question, security_answer_hash, security_answer_salt)
+         VALUES (?, ?, ?, ?, 'member', 'pending', ?, ?, ?)`)
+        .bind(email.trim(), String(name).trim(), hash, salt, String(security_question).trim(), answerHash, answerSalt).run();
       return json({ ok: true, message: 'Account created. A chapter administrator will verify your membership before access is granted.' });
     }
 
@@ -147,6 +161,54 @@ export async function onRequest(context) {
       const token = getCookie(request, SESSION_COOKIE);
       if (token) await env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
       return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
+    }
+
+    // Forgot password — no email infrastructure, so recovery uses a security question
+    // set at signup. Step 1 must not reveal whether an account/question exists, so a
+    // nonexistent, question-less, or currently-locked account all get the same decoy.
+    if (path === 'forgot/question' && method === 'POST') {
+      const DECOY_QUESTION = 'What is your chapter member ID?';
+      const { email } = await readBody(request);
+      if (!isValidEmail(email)) return err('Please enter a valid email address.');
+      const user = await env.DB.prepare('SELECT security_question, security_locked_until FROM users WHERE email = ?')
+        .bind(email.trim()).first();
+      const locked = user && user.security_locked_until && new Date(user.security_locked_until) > new Date();
+      if (user && user.security_question && !locked) {
+        return json({ question: user.security_question });
+      }
+      // Lock has expired — clear it so the member can try again with the real question next time.
+      if (user && user.security_locked_until && !locked) {
+        await env.DB.prepare('UPDATE users SET security_fail_count = 0, security_locked_until = NULL WHERE email = ?')
+          .bind(email.trim()).run();
+      }
+      return json({ question: DECOY_QUESTION });
+    }
+
+    if (path === 'forgot/reset' && method === 'POST') {
+      const { email, answer, new_password } = await readBody(request);
+      if (!isValidEmail(email) || !answer) return err('Enter your email and answer.');
+      if (!new_password || String(new_password).length < 8) return err('New password must be at least 8 characters.');
+      const badAnswer = 'That answer didn’t match our records, or this account can’t use security-question reset.';
+      const user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.trim()).first();
+      if (!user || !user.security_question || !user.security_answer_hash) return err(badAnswer);
+      if (user.security_locked_until && new Date(user.security_locked_until) > new Date()) {
+        return err('Too many attempts. Try again after ' + new Date(user.security_locked_until).toLocaleString() + '.');
+      }
+      const hash = await hashPassword(normalizeAnswer(answer), user.security_answer_salt);
+      if (!timingSafeEqual(hash, user.security_answer_hash)) {
+        const failCount = (user.security_fail_count || 0) + 1;
+        const lockedUntil = failCount >= 5 ? new Date(Date.now() + 30 * 60000).toISOString() : null;
+        await env.DB.prepare('UPDATE users SET security_fail_count = ?, security_locked_until = ? WHERE id = ?')
+          .bind(failCount, lockedUntil, user.id).run();
+        return err(badAnswer);
+      }
+      const salt = randomHex(16);
+      const passHash = await hashPassword(String(new_password), salt);
+      await env.DB.prepare(
+        'UPDATE users SET password_hash = ?, salt = ?, security_fail_count = 0, security_locked_until = NULL WHERE id = ?')
+        .bind(passHash, salt, user.id).run();
+      await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
+      return json({ ok: true });
     }
 
     if (path === 'me' && method === 'GET') {
@@ -192,6 +254,25 @@ export async function onRequest(context) {
       });
     }
 
+    // Koala build page — public info/phases/photos, no sign-in required.
+    if (path === 'koala' && method === 'GET') {
+      const info = await env.DB.prepare('SELECT * FROM koala_info WHERE id = 1').first();
+      const { results: phases } = await env.DB.prepare('SELECT * FROM koala_phases ORDER BY sort_order, id').all();
+      const { results: photos } = await env.DB.prepare(
+        'SELECT id, caption, phase_id, sort_order FROM koala_photos ORDER BY sort_order, id').all();
+      return json({ info: info || {}, phases, photos });
+    }
+
+    if (segments[0] === 'koala' && segments[1] === 'photos' && segments.length === 3 && method === 'GET') {
+      const photo = await env.DB.prepare('SELECT r2_key, mime FROM koala_photos WHERE id = ?').bind(+segments[2]).first();
+      if (!photo) return err('Photo not found.', 404);
+      const obj = await env.DOCS.get(photo.r2_key);
+      if (!obj) return err('File is missing from storage.', 404);
+      return new Response(obj.body, {
+        headers: { 'Content-Type': photo.mime || 'image/jpeg', 'Cache-Control': 'public, max-age=86400' },
+      });
+    }
+
     // ============ MEMBER (active session required) ============
 
     if (segments[0] === 'member') {
@@ -200,19 +281,24 @@ export async function onRequest(context) {
       const sub = segments.slice(1).join('/');
 
       if (sub === 'events' && method === 'GET') {
+        const isAdmin = user.role === 'admin' ? 1 : 0;
         const { results } = await env.DB.prepare(
-          `SELECT e.*, CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS going
-           FROM events e LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = ?
-           ORDER BY e.date`).bind(user.id).all();
+          `SELECT e.*, r.status AS my_rsvp
+           FROM events e LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = ?1
+           WHERE ?2 = 1 OR e.group_id IS NULL OR e.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?1)
+           ORDER BY e.date`).bind(user.id, isAdmin).all();
         return json(results);
       }
 
       if (sub === 'rsvp' && method === 'POST') {
-        const { event_id, going } = await readBody(request);
+        const { event_id, status } = await readBody(request);
         const ev = await env.DB.prepare('SELECT id FROM events WHERE id = ?').bind(+event_id).first();
         if (!ev) return err('Event not found.', 404);
-        if (going) {
-          await env.DB.prepare('INSERT OR IGNORE INTO rsvps (user_id, event_id) VALUES (?, ?)').bind(user.id, +event_id).run();
+        if (status === 'going' || status === 'not_going') {
+          await env.DB.prepare(
+            `INSERT INTO rsvps (user_id, event_id, status) VALUES (?, ?, ?)
+             ON CONFLICT (user_id, event_id) DO UPDATE SET status = excluded.status`)
+            .bind(user.id, +event_id, status).run();
         } else {
           await env.DB.prepare('DELETE FROM rsvps WHERE user_id = ? AND event_id = ?').bind(user.id, +event_id).run();
         }
@@ -243,6 +329,90 @@ export async function onRequest(context) {
         return json(results);
       }
 
+      if (sub === 'security' && method === 'GET') {
+        const row = await env.DB.prepare('SELECT security_question FROM users WHERE id = ?').bind(user.id).first();
+        return json({ has_security_question: !!(row && row.security_question), security_question: (row && row.security_question) || '' });
+      }
+
+      if (sub === 'security' && method === 'POST') {
+        const { security_question, security_answer } = await readBody(request);
+        if (!security_question || !String(security_question).trim()) return err('Choose a security question.');
+        if (!security_answer || !String(security_answer).trim()) return err('Provide an answer.');
+        const answerSalt = randomHex(16);
+        const answerHash = await hashPassword(normalizeAnswer(security_answer), answerSalt);
+        await env.DB.prepare(
+          'UPDATE users SET security_question = ?, security_answer_hash = ?, security_answer_salt = ?, security_fail_count = 0, security_locked_until = NULL WHERE id = ?')
+          .bind(String(security_question).trim(), answerHash, answerSalt, user.id).run();
+        return json({ ok: true });
+      }
+
+      if (sub === 'password' && method === 'POST') {
+        const { current_password, new_password } = await readBody(request);
+        if (!new_password || String(new_password).length < 8) return err('New password must be at least 8 characters.');
+        const full = await env.DB.prepare('SELECT password_hash, salt FROM users WHERE id = ?').bind(user.id).first();
+        const currentHash = await hashPassword(String(current_password || ''), full.salt);
+        if (!timingSafeEqual(currentHash, full.password_hash)) return err('Current password is incorrect.', 401);
+        const salt = randomHex(16);
+        const hash = await hashPassword(String(new_password), salt);
+        await env.DB.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?').bind(hash, salt, user.id).run();
+        return json({ ok: true });
+      }
+
+      if (sub === 'attention' && method === 'GET') {
+        const isAdmin = user.role === 'admin' ? 1 : 0;
+        const { results: events } = await env.DB.prepare(
+          `SELECT e.id, e.title, e.date FROM events e
+           LEFT JOIN rsvps r ON r.event_id = e.id AND r.user_id = ?1
+           WHERE (?2 = 1 OR e.group_id IS NULL OR e.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?1))
+             AND e.date >= date('now') AND r.user_id IS NULL
+           ORDER BY e.date`).bind(user.id, isAdmin).all();
+        const { results: attentionPolls } = await env.DB.prepare(
+          `SELECT p.id, p.question FROM polls p
+           WHERE p.status = 'active' AND (p.closes_at IS NULL OR p.closes_at > datetime('now'))
+             AND p.id NOT IN (SELECT poll_id FROM poll_votes WHERE user_id = ?)
+           ORDER BY p.created_at DESC`).bind(user.id).all();
+        const secRow = await env.DB.prepare('SELECT security_question FROM users WHERE id = ?').bind(user.id).first();
+        return json({ events, polls: attentionPolls, needs_security_question: !(secRow && secRow.security_question) });
+      }
+
+      if (segments[1] === 'polls' && segments.length === 2 && method === 'GET') {
+        const { results: allPolls } = await env.DB.prepare(
+          "SELECT * FROM polls WHERE status IN ('active', 'closed') ORDER BY created_at DESC").all();
+        const { results: allOptions } = await env.DB.prepare(
+          `SELECT o.*, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS vote_count
+           FROM poll_options o ORDER BY o.sort_order`).all();
+        const { results: myVotes } = await env.DB.prepare(
+          'SELECT poll_id, option_id FROM poll_votes WHERE user_id = ?').bind(user.id).all();
+        const myVoteByPoll = {};
+        myVotes.forEach((v) => { myVoteByPoll[v.poll_id] = v.option_id; });
+        const optsByPoll = {};
+        allOptions.forEach((o) => { (optsByPoll[o.poll_id] = optsByPoll[o.poll_id] || []).push(o); });
+        const shaped = allPolls.map((p) => ({
+          id: p.id, question: p.question, description: p.description, status: p.status, closes_at: p.closes_at,
+          voted: Object.prototype.hasOwnProperty.call(myVoteByPoll, p.id), my_option_id: myVoteByPoll[p.id] || null,
+          options: (optsByPoll[p.id] || []).map((o) => ({ id: o.id, label: o.label, vote_count: o.vote_count })),
+        }));
+        return json({ active: shaped.filter((p) => p.status === 'active'), closed: shaped.filter((p) => p.status === 'closed') });
+      }
+
+      if (segments[1] === 'polls' && segments[3] === 'vote' && method === 'POST') {
+        const pollId = +segments[2];
+        const poll = await env.DB.prepare('SELECT * FROM polls WHERE id = ?').bind(pollId).first();
+        if (!poll) return err('Poll not found.', 404);
+        if (poll.status !== 'active') return err('This poll is not open for voting.');
+        if (poll.closes_at && new Date(poll.closes_at) < new Date()) return err('This poll has closed.');
+        const { option_id } = await readBody(request);
+        const opt = await env.DB.prepare('SELECT id FROM poll_options WHERE id = ? AND poll_id = ?').bind(+option_id, pollId).first();
+        if (!opt) return err('Choose a valid option.');
+        try {
+          await env.DB.prepare('INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES (?, ?, ?)')
+            .bind(pollId, +option_id, user.id).run();
+        } catch (e) {
+          return err('You already voted in this poll.', 409);
+        }
+        return json({ ok: true });
+      }
+
       return err('Not found.', 404);
     }
 
@@ -265,26 +435,28 @@ export async function onRequest(context) {
       if (sub === 'events') {
         if (method === 'GET') {
           const { results } = await env.DB.prepare(
-            `SELECT e.*, (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id) AS rsvp_count
-             FROM events e ORDER BY e.date`).all();
+            `SELECT e.*, g.name AS group_name,
+                    (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count,
+                    (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'not_going') AS not_going_count
+             FROM events e LEFT JOIN groups g ON g.id = e.group_id ORDER BY e.date`).all();
           return json(results);
         }
         if (method === 'POST' && !id) {
           const b = await readBody(request);
           if (!b.title || !/^\d{4}-\d{2}-\d{2}$/.test(b.date || '')) return err('Title and a date (YYYY-MM-DD) are required.');
           await env.DB.prepare(
-            'INSERT INTO events (title, date, start_time, end_time, location, kind, description, members_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            'INSERT INTO events (title, date, start_time, end_time, location, kind, description, members_only, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
             .bind(b.title, b.date, b.start_time || '', b.end_time || '', b.location || 'Cherry Ridge Airport',
-                  b.kind || 'Meeting', b.description || '', b.members_only ? 1 : 0).run();
+                  b.kind || 'Meeting', b.description || '', b.members_only ? 1 : 0, b.group_id ? +b.group_id : null).run();
           return json({ ok: true });
         }
         if (method === 'PUT' && id) {
           const b = await readBody(request);
           if (!b.title || !/^\d{4}-\d{2}-\d{2}$/.test(b.date || '')) return err('Title and a date (YYYY-MM-DD) are required.');
           await env.DB.prepare(
-            'UPDATE events SET title=?, date=?, start_time=?, end_time=?, location=?, kind=?, description=?, members_only=? WHERE id=?')
+            'UPDATE events SET title=?, date=?, start_time=?, end_time=?, location=?, kind=?, description=?, members_only=?, group_id=? WHERE id=?')
             .bind(b.title, b.date, b.start_time || '', b.end_time || '', b.location || '', b.kind || 'Meeting',
-                  b.description || '', b.members_only ? 1 : 0, id).run();
+                  b.description || '', b.members_only ? 1 : 0, b.group_id ? +b.group_id : null, id).run();
           return json({ ok: true });
         }
         if (method === 'DELETE' && id) {
@@ -295,9 +467,19 @@ export async function onRequest(context) {
 
       if (sub === 'rsvps' && method === 'GET') {
         const eventId = +(new URL(request.url).searchParams.get('event_id') || 0);
-        const { results } = await env.DB.prepare(
-          'SELECT u.name, u.email FROM rsvps r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? ORDER BY u.name').bind(eventId).all();
-        return json(results);
+        const [going, notGoing, noResponse] = await Promise.all([
+          env.DB.prepare(
+            "SELECT u.name, u.email FROM rsvps r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.status = 'going' ORDER BY u.name")
+            .bind(eventId).all(),
+          env.DB.prepare(
+            "SELECT u.name, u.email FROM rsvps r JOIN users u ON u.id = r.user_id WHERE r.event_id = ? AND r.status = 'not_going' ORDER BY u.name")
+            .bind(eventId).all(),
+          env.DB.prepare(
+            `SELECT u.name, u.email FROM users u
+             WHERE u.status = 'active' AND u.id NOT IN (SELECT user_id FROM rsvps WHERE event_id = ?)
+             ORDER BY u.name`).bind(eventId).all(),
+        ]);
+        return json({ going: going.results, not_going: notGoing.results, no_response: noResponse.results });
       }
 
       if (sub === 'posts') {
@@ -411,6 +593,191 @@ export async function onRequest(context) {
       if (sub === 'subscribers' && method === 'GET') {
         const { results } = await env.DB.prepare('SELECT email, created_at FROM subscribers ORDER BY created_at DESC').all();
         return json(results);
+      }
+
+      if (sub === 'groups') {
+        if (method === 'GET' && !id) {
+          const { results } = await env.DB.prepare(
+            `SELECT g.*, (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
+             FROM groups g ORDER BY g.name`).all();
+          return json(results);
+        }
+        if (method === 'POST' && !id) {
+          const b = await readBody(request);
+          if (!b.name || !String(b.name).trim()) return err('Group name is required.');
+          const existing = await env.DB.prepare('SELECT id FROM groups WHERE name = ?').bind(String(b.name).trim()).first();
+          if (existing) return err('A group with that name already exists.', 409);
+          await env.DB.prepare('INSERT INTO groups (name) VALUES (?)').bind(String(b.name).trim()).run();
+          return json({ ok: true });
+        }
+        if (method === 'PUT' && id) {
+          const b = await readBody(request);
+          if (!b.name || !String(b.name).trim()) return err('Group name is required.');
+          await env.DB.prepare('UPDATE groups SET name = ? WHERE id = ?').bind(String(b.name).trim(), id).run();
+          return json({ ok: true });
+        }
+        if (method === 'DELETE' && id) {
+          await env.DB.prepare('DELETE FROM groups WHERE id = ?').bind(id).run();
+          return json({ ok: true });
+        }
+        // GET /api/admin/groups/:id/members — list member user_ids currently in the group
+        if (method === 'GET' && id && segments[3] === 'members') {
+          const { results } = await env.DB.prepare('SELECT user_id FROM group_members WHERE group_id = ?').bind(id).all();
+          return json(results.map((r) => r.user_id));
+        }
+        // POST /api/admin/groups/:id/members  { user_id }
+        if (method === 'POST' && id && segments[3] === 'members') {
+          const b = await readBody(request);
+          if (!b.user_id) return err('user_id is required.');
+          await env.DB.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)').bind(id, +b.user_id).run();
+          return json({ ok: true });
+        }
+        // DELETE /api/admin/groups/:id/members/:userId
+        if (method === 'DELETE' && id && segments[3] === 'members' && segments[4]) {
+          await env.DB.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').bind(id, +segments[4]).run();
+          return json({ ok: true });
+        }
+        return err('Not found.', 404);
+      }
+
+      if (sub === 'polls') {
+        if (method === 'GET' && !id) {
+          const { results: polls } = await env.DB.prepare('SELECT * FROM polls ORDER BY created_at DESC').all();
+          const { results: options } = await env.DB.prepare(
+            `SELECT o.*, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS vote_count
+             FROM poll_options o ORDER BY o.sort_order`).all();
+          const byPoll = {};
+          options.forEach((o) => { (byPoll[o.poll_id] = byPoll[o.poll_id] || []).push(o); });
+          return json(polls.map((p) => Object.assign({}, p, { options: byPoll[p.id] || [] })));
+        }
+        if (method === 'POST' && !id) {
+          const b = await readBody(request);
+          if (!b.question || !String(b.question).trim()) return err('Poll question is required.');
+          const opts = Array.isArray(b.options) ? b.options.map((o) => String(o).trim()).filter(Boolean) : [];
+          if (opts.length < 2) return err('Provide at least two options.');
+          const res = await env.DB.prepare('INSERT INTO polls (question, description) VALUES (?, ?)')
+            .bind(String(b.question).trim(), String(b.description || '')).run();
+          const pollId = res.meta.last_row_id;
+          for (let i = 0; i < opts.length; i++) {
+            await env.DB.prepare('INSERT INTO poll_options (poll_id, label, sort_order) VALUES (?, ?, ?)').bind(pollId, opts[i], i).run();
+          }
+          return json({ ok: true });
+        }
+        if (method === 'PUT' && id && !segments[3]) {
+          const b = await readBody(request);
+          if (!b.question || !String(b.question).trim()) return err('Poll question is required.');
+          const status = ['draft', 'active', 'closed'].includes(b.status) ? b.status : 'draft';
+          await env.DB.prepare('UPDATE polls SET question=?, description=?, status=?, closes_at=? WHERE id=?')
+            .bind(String(b.question).trim(), String(b.description || ''), status, b.closes_at || null, id).run();
+          return json({ ok: true });
+        }
+        if (method === 'DELETE' && id && !segments[3]) {
+          await env.DB.prepare('DELETE FROM polls WHERE id = ?').bind(id).run();
+          return json({ ok: true });
+        }
+        if (method === 'GET' && id && segments[3] === 'results') {
+          const { results } = await env.DB.prepare(
+            `SELECT o.id, o.label, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS vote_count
+             FROM poll_options o WHERE o.poll_id = ? ORDER BY o.sort_order`).bind(id).all();
+          return json(results);
+        }
+        if (method === 'POST' && id && segments[3] === 'options') {
+          const poll = await env.DB.prepare('SELECT status FROM polls WHERE id = ?').bind(id).first();
+          if (!poll) return err('Poll not found.', 404);
+          if (poll.status !== 'draft') return err('Options can only be changed while the poll is a draft.');
+          const b = await readBody(request);
+          if (!b.label || !String(b.label).trim()) return err('Option label is required.');
+          const maxOrder = await env.DB.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM poll_options WHERE poll_id = ?').bind(id).first();
+          await env.DB.prepare('INSERT INTO poll_options (poll_id, label, sort_order) VALUES (?, ?, ?)')
+            .bind(id, String(b.label).trim(), maxOrder.m + 1).run();
+          return json({ ok: true });
+        }
+        if (method === 'DELETE' && id && segments[3] === 'options' && segments[4]) {
+          const poll = await env.DB.prepare('SELECT status FROM polls WHERE id = ?').bind(id).first();
+          if (!poll) return err('Poll not found.', 404);
+          if (poll.status !== 'draft') return err('Options can only be changed while the poll is a draft.');
+          await env.DB.prepare('DELETE FROM poll_options WHERE id = ? AND poll_id = ?').bind(+segments[4], id).run();
+          return json({ ok: true });
+        }
+        return err('Not found.', 404);
+      }
+
+      if (sub === 'koala') {
+        const resource = segments[2] || '';
+        const subId = segments[3] ? +segments[3] : null;
+
+        if (resource === 'info' && method === 'POST') {
+          const b = await readBody(request);
+          await env.DB.prepare(
+            `UPDATE koala_info SET intro=?, stat1_value=?, stat1_label=?, stat2_value=?, stat2_label=?,
+             stat3_value=?, stat3_label=?, cta_text=?, updated_at=datetime('now') WHERE id=1`)
+            .bind(String(b.intro || ''), String(b.stat1_value || ''), String(b.stat1_label || ''),
+                  String(b.stat2_value || ''), String(b.stat2_label || ''), String(b.stat3_value || ''),
+                  String(b.stat3_label || ''), String(b.cta_text || '')).run();
+          return json({ ok: true });
+        }
+
+        if (resource === 'phases') {
+          if (method === 'GET') {
+            const { results } = await env.DB.prepare('SELECT * FROM koala_phases ORDER BY sort_order, id').all();
+            return json(results);
+          }
+          if (method === 'POST' && !subId) {
+            const b = await readBody(request);
+            if (!b.name) return err('Phase name is required.');
+            await env.DB.prepare(
+              'INSERT INTO koala_phases (name, status, description, sort_order) VALUES (?, ?, ?, ?)')
+              .bind(b.name, ['complete', 'in_progress', 'upcoming'].includes(b.status) ? b.status : 'upcoming',
+                    b.description || '', +b.sort_order || 0).run();
+            return json({ ok: true });
+          }
+          if (method === 'PUT' && subId) {
+            const b = await readBody(request);
+            if (!b.name) return err('Phase name is required.');
+            await env.DB.prepare(
+              `UPDATE koala_phases SET name=?, status=?, description=?, sort_order=?, updated_at=datetime('now') WHERE id=?`)
+              .bind(b.name, ['complete', 'in_progress', 'upcoming'].includes(b.status) ? b.status : 'upcoming',
+                    b.description || '', +b.sort_order || 0, subId).run();
+            return json({ ok: true });
+          }
+          if (method === 'DELETE' && subId) {
+            await env.DB.prepare('DELETE FROM koala_phases WHERE id = ?').bind(subId).run();
+            return json({ ok: true });
+          }
+        }
+
+        if (resource === 'photos') {
+          if (method === 'GET') {
+            const { results } = await env.DB.prepare('SELECT * FROM koala_photos ORDER BY sort_order, id').all();
+            return json(results);
+          }
+          if (method === 'POST' && !subId) {
+            const fd = await request.formData();
+            const file = fd.get('file');
+            if (!file || typeof file === 'string') return err('Attach a photo to upload.');
+            if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return err('Photos must be JPEG, PNG, or WebP.');
+            if (file.size > 10 * 1024 * 1024) return err('Photos must be 10 MB or smaller.');
+            const caption = String(fd.get('caption') || '').trim();
+            const phaseId = fd.get('phase_id') ? +fd.get('phase_id') : null;
+            const sortOrder = fd.get('sort_order') ? +fd.get('sort_order') : 0;
+            const key = 'koala/' + Date.now() + '-' + randomHex(4) + '-' + (file.name || 'photo').replace(/[^\w.-]/g, '_');
+            await env.DOCS.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
+            await env.DB.prepare(
+              'INSERT INTO koala_photos (r2_key, mime, size, caption, phase_id, sort_order) VALUES (?, ?, ?, ?, ?, ?)')
+              .bind(key, file.type, file.size, caption, phaseId, sortOrder).run();
+            return json({ ok: true });
+          }
+          if (method === 'DELETE' && subId) {
+            const photo = await env.DB.prepare('SELECT r2_key FROM koala_photos WHERE id = ?').bind(subId).first();
+            if (photo) {
+              await env.DOCS.delete(photo.r2_key);
+              await env.DB.prepare('DELETE FROM koala_photos WHERE id = ?').bind(subId).run();
+            }
+            return json({ ok: true });
+          }
+        }
+
+        return err('Not found.', 404);
       }
 
       return err('Not found.', 404);

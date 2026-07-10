@@ -3,16 +3,21 @@
 -- Apply to production: npx wrangler d1 execute eaa283-db --remote --file=schema.sql
 
 CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  name          TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  salt          TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'member',   -- 'member' | 'admin'
-  status        TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'active' | 'disabled'
-  role_title    TEXT DEFAULT '',                  -- e.g. 'President', shown in member directory
-  member_since  TEXT DEFAULT '',                  -- e.g. '2016'
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  email                 TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name                  TEXT NOT NULL,
+  password_hash         TEXT NOT NULL,
+  salt                  TEXT NOT NULL,
+  role                  TEXT NOT NULL DEFAULT 'member',   -- 'member' | 'admin'
+  status                TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'active' | 'disabled'
+  role_title            TEXT DEFAULT '',                  -- e.g. 'President', shown in member directory
+  member_since          TEXT DEFAULT '',                  -- e.g. '2016'
+  security_question     TEXT,                             -- account-recovery question (no email infra — see FUTURE-ROADMAP.md)
+  security_answer_hash  TEXT,
+  security_answer_salt  TEXT,
+  security_fail_count   INTEGER NOT NULL DEFAULT 0,
+  security_locked_until TEXT,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -29,6 +34,20 @@ CREATE TABLE IF NOT EXISTS banner (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Committees/groups — admin-managed. Scoping an event to a group hides it from
+-- everyone except that group's members (and admins, who see everything).
+CREATE TABLE IF NOT EXISTS groups (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (group_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   title        TEXT NOT NULL,
@@ -38,7 +57,8 @@ CREATE TABLE IF NOT EXISTS events (
   location     TEXT NOT NULL DEFAULT 'Cherry Ridge Airport',
   kind         TEXT NOT NULL DEFAULT 'Meeting', -- Meeting | Young Eagles | Fly-In | Board | Build
   description  TEXT NOT NULL DEFAULT '',
-  members_only INTEGER NOT NULL DEFAULT 0
+  members_only INTEGER NOT NULL DEFAULT 0,
+  group_id     INTEGER REFERENCES groups(id) ON DELETE SET NULL -- optional committee/group scope; NULL = not group-restricted
 );
 
 CREATE TABLE IF NOT EXISTS posts (
@@ -73,6 +93,7 @@ CREATE TABLE IF NOT EXISTS dues (
 CREATE TABLE IF NOT EXISTS rsvps (
   user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  status   TEXT NOT NULL DEFAULT 'going', -- 'going' | 'not_going' (no row at all = no response)
   PRIMARY KEY (user_id, event_id)
 );
 
@@ -83,9 +104,72 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Single-row table for the editable text/stats on the public Koala page.
+CREATE TABLE IF NOT EXISTS koala_info (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  intro       TEXT NOT NULL DEFAULT '',
+  stat1_value TEXT NOT NULL DEFAULT '2',   stat1_label TEXT NOT NULL DEFAULT 'seats',
+  stat2_value TEXT NOT NULL DEFAULT 'LSA', stat2_label TEXT NOT NULL DEFAULT 'light sport',
+  stat3_value TEXT NOT NULL DEFAULT 'Thu', stat3_label TEXT NOT NULL DEFAULT 'build nights',
+  cta_text    TEXT NOT NULL DEFAULT 'No experience needed — just curiosity and a willingness to learn. Join us on a Thursday build night.',
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS koala_phases (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'upcoming', -- 'complete' | 'in_progress' | 'upcoming'
+  description TEXT NOT NULL DEFAULT '',
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS polls (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  question    TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'draft', -- 'draft' | 'active' | 'closed'
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  closes_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS poll_options (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_id    INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  label      TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS poll_votes (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_id   INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  voted_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (poll_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS koala_photos (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  r2_key     TEXT NOT NULL,
+  mime       TEXT NOT NULL DEFAULT 'image/jpeg',
+  size       INTEGER NOT NULL DEFAULT 0,
+  caption    TEXT NOT NULL DEFAULT '',
+  phase_id   INTEGER REFERENCES koala_phases(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  posted_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_date   ON events(date);
 CREATE INDEX IF NOT EXISTS idx_posts_pub     ON posts(published_at);
+
+INSERT OR IGNORE INTO koala_info (id) VALUES (1);
+INSERT OR IGNORE INTO koala_phases (id, name, status, description, sort_order) VALUES
+  (1, 'Fuselage frame', 'complete', 'Built, squared, and inspected.', 1),
+  (2, 'Wing structure', 'complete', 'Spars and ribs assembled.', 2),
+  (3, 'Wing covering', 'in_progress', 'Fabric and finishing underway.', 3),
+  (4, 'Engine & systems', 'upcoming', 'Powerplant install and rigging.', 4);
 
 -- ============ SEED DATA (from the approved design mockups) ============
 

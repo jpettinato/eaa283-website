@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   function selectTab(tab) {
     document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === tab));
-    ['banner', 'events', 'posts', 'documents', 'members', 'subscribers'].forEach((t) => { H('tab-' + t).hidden = t !== tab; });
+    ['banner', 'events', 'posts', 'documents', 'members', 'subscribers', 'koala', 'groups', 'polls'].forEach((t) => { H('tab-' + t).hidden = t !== tab; });
     RENDER[tab]();
   }
 
@@ -103,7 +103,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   RENDER.events = async function () {
     const pane = H('tab-events');
-    const events = await api('/api/admin/events').catch(() => []);
+    const [events, groups] = await Promise.all([
+      api('/api/admin/events').catch(() => []),
+      api('/api/admin/groups').catch(() => []),
+    ]);
+    const groupOptions = [['', 'None (not group-restricted)']].concat(groups.map((g) => [g.id, g.name]));
     pane.innerHTML =
       '<div class="card"><h3 id="ev-form-title">Add an event</h3>' +
       '<input type="hidden" id="ev-id">' +
@@ -118,6 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div><label class="flbl">Location</label><input class="fld" id="ev-loc" value="Cherry Ridge Airport"></div>' +
       '</div>' +
       '<div class="frow"><div><label class="flbl">Description</label><textarea class="fld" id="ev-desc" rows="3"></textarea></div></div>' +
+      '<div class="frow"><div><label class="flbl">Group (restricts visibility on the member calendar)</label>' +
+      '<select class="fld" id="ev-group">' + options(groupOptions) + '</select></div></div>' +
       '<label style="display:flex; align-items:center; gap:9px; font-size:15px; margin-bottom:16px; cursor:pointer;">' +
       '<input type="checkbox" id="ev-members" style="width:17px; height:17px; accent-color:#0A5BC4;"> Members only (hidden from the public calendar)</label>' +
       '<div id="ev-msg" class="msg"></div>' +
@@ -129,8 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '<tr><td style="white-space:nowrap;">' + e.date + '</td>' +
         '<td style="font-weight:600;">' + escapeHtml(e.title) + '</td>' +
         '<td>' + escapeHtml(e.kind) + '</td>' +
-        '<td>' + (e.members_only ? '<span class="pill blue">Members</span>' : '<span class="pill active">Public</span>') + '</td>' +
-        '<td><button class="btn ghost small" data-rsvps="' + e.id + '">' + e.rsvp_count + ' going</button></td>' +
+        '<td>' + (e.group_name ? '<span class="pill blue">' + escapeHtml(e.group_name) + '</span>' : (e.members_only ? '<span class="pill blue">Members</span>' : '<span class="pill active">Public</span>')) + '</td>' +
+        '<td><button class="btn ghost small" data-rsvps="' + e.id + '">' + e.going_count + ' going · ' + e.not_going_count + ' not going</button></td>' +
         '<td style="white-space:nowrap;"><button class="btn ghost small" data-edit="' + e.id + '">Edit</button> ' +
         '<button class="btn danger small" data-del="' + e.id + '">Delete</button></td></tr>' +
         '<tr id="rsvp-row-' + e.id + '" hidden><td colspan="6" style="background:#F6F8FC;"></td></tr>'
@@ -145,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
       H('ev-end').value = e ? e.end_time : '';
       H('ev-loc').value = e ? e.location : 'Cherry Ridge Airport';
       H('ev-desc').value = e ? e.description : '';
+      H('ev-group').value = e && e.group_id ? e.group_id : '';
       H('ev-members').checked = !!(e && e.members_only);
       H('ev-form-title').textContent = e ? 'Edit event' : 'Add an event';
       H('ev-reset').hidden = !e;
@@ -156,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         title: H('ev-title').value.trim(), date: H('ev-date').value, kind: H('ev-kind').value,
         start_time: H('ev-start').value.trim(), end_time: H('ev-end').value.trim(),
         location: H('ev-loc').value.trim(), description: H('ev-desc').value.trim(),
-        members_only: H('ev-members').checked,
+        members_only: H('ev-members').checked, group_id: H('ev-group').value || null,
       };
       try {
         await api('/api/admin/events' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body });
@@ -178,10 +185,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const id = b.getAttribute('data-rsvps');
       const row = H('rsvp-row-' + id);
       if (!row.hidden) { row.hidden = true; return; }
-      const list = await api('/api/admin/rsvps?event_id=' + id).catch(() => []);
-      row.firstElementChild.innerHTML = list.length
-        ? '<strong>Going:</strong> ' + list.map((r) => escapeHtml(r.name) + ' (' + escapeHtml(r.email) + ')').join(', ')
-        : 'No RSVPs yet.';
+      const r = await api('/api/admin/rsvps?event_id=' + id).catch(() => ({ going: [], not_going: [], no_response: [] }));
+      const names = (list) => list.length ? list.map((p) => escapeHtml(p.name) + ' (' + escapeHtml(p.email) + ')').join(', ') : 'None';
+      row.firstElementChild.innerHTML =
+        '<div style="margin-bottom:6px;"><strong>Going (' + r.going.length + '):</strong> ' + names(r.going) + '</div>' +
+        '<div style="margin-bottom:6px;"><strong>Not going (' + r.not_going.length + '):</strong> ' + names(r.not_going) + '</div>' +
+        '<div><strong>No response (' + r.no_response.length + '):</strong> ' + names(r.no_response) + '</div>';
       row.hidden = false;
     }));
   };
@@ -379,7 +388,16 @@ document.addEventListener('DOMContentLoaded', () => {
   RENDER.subscribers = async function () {
     const pane = H('tab-subscribers');
     const subs = await api('/api/admin/subscribers').catch(() => []);
+    const unsubUrl = location.origin + '/unsubscribe.html';
+    const unsubLine = "Don't want these emails? Unsubscribe at " + unsubUrl;
     pane.innerHTML =
+      '<div class="card">' +
+      '<h3>Unsubscribe link for bulk emails</h3>' +
+      '<p class="muted" style="margin:0 0 14px;">Paste this into the bottom of any email you send to the list — required so recipients have a working opt-out.</p>' +
+      '<div id="unsub-copy-msg" class="msg"></div>' +
+      '<div class="fld" style="font-family:monospace; font-size:13.5px; margin-bottom:10px; user-select:all;">' + escapeHtml(unsubLine) + '</div>' +
+      '<button class="btn ghost small" id="copy-unsub-line">Copy link + sentence</button>' +
+      '</div>' +
       '<div class="card"><h3>Newsletter subscribers (' + subs.length + ')</h3>' +
       '<p class="muted" style="margin:0 0 14px;">Emails collected from the "Never miss an update" form on the News page. Use "Copy all" to paste them into your email BCC field.</p>' +
       '<div id="subs-msg" class="msg"></div>' +
@@ -388,11 +406,362 @@ document.addEventListener('DOMContentLoaded', () => {
       subs.map((s) => '<tr><td>' + escapeHtml(s.email) + '</td><td>' + String(s.created_at).slice(0, 10) + '</td></tr>').join('') +
       '</tbody></table></div>' +
       (subs.length ? '' : '<div class="muted" style="padding:14px 0 4px;">No subscribers yet.</div>') + '</div>';
+    H('copy-unsub-line').addEventListener('click', async () => {
+      await navigator.clipboard.writeText(unsubLine);
+      flash(H('unsub-copy-msg'), true, 'Copied to the clipboard.');
+    });
     const copyBtn = H('copy-subs');
     if (copyBtn) copyBtn.addEventListener('click', async () => {
       await navigator.clipboard.writeText(subs.map((s) => s.email).join(', '));
       flash(H('subs-msg'), true, 'Copied ' + subs.length + ' addresses to the clipboard.');
     });
+  };
+
+  // ---------- koala build ----------
+
+  const PHASE_STATUS = [['complete', '✓ Complete'], ['in_progress', '● In progress'], ['upcoming', '○ Upcoming']];
+
+  RENDER.koala = async function () {
+    const pane = H('tab-koala');
+    const [info, phases, photos] = await Promise.all([
+      api('/api/koala').then((d) => d.info).catch(() => ({})),
+      api('/api/admin/koala/phases').catch(() => []),
+      api('/api/admin/koala/photos').catch(() => []),
+    ]);
+
+    pane.innerHTML =
+      '<div class="card"><h3>Page text &amp; stats</h3>' +
+      '<div class="frow"><div><label class="flbl">Intro (first paragraph)</label><textarea class="fld" id="ki-intro" rows="3">' + escapeHtml(info.intro || '') + '</textarea></div></div>' +
+      '<div class="frow cols" style="grid-template-columns:1fr 1fr;">' +
+        '<div><label class="flbl">Stat 1 value</label><input class="fld" id="ki-s1v" value="' + escapeHtml(info.stat1_value || '') + '"></div>' +
+        '<div><label class="flbl">Stat 1 label</label><input class="fld" id="ki-s1l" value="' + escapeHtml(info.stat1_label || '') + '"></div>' +
+      '</div>' +
+      '<div class="frow cols" style="grid-template-columns:1fr 1fr;">' +
+        '<div><label class="flbl">Stat 2 value</label><input class="fld" id="ki-s2v" value="' + escapeHtml(info.stat2_value || '') + '"></div>' +
+        '<div><label class="flbl">Stat 2 label</label><input class="fld" id="ki-s2l" value="' + escapeHtml(info.stat2_label || '') + '"></div>' +
+      '</div>' +
+      '<div class="frow cols" style="grid-template-columns:1fr 1fr;">' +
+        '<div><label class="flbl">Stat 3 value</label><input class="fld" id="ki-s3v" value="' + escapeHtml(info.stat3_value || '') + '"></div>' +
+        '<div><label class="flbl">Stat 3 label</label><input class="fld" id="ki-s3l" value="' + escapeHtml(info.stat3_label || '') + '"></div>' +
+      '</div>' +
+      '<div class="frow"><div><label class="flbl">"Get involved" CTA text</label><textarea class="fld" id="ki-cta" rows="2">' + escapeHtml(info.cta_text || '') + '</textarea></div></div>' +
+      '<div id="ki-msg" class="msg"></div>' +
+      '<button class="btn" id="ki-save">Save page text</button></div>' +
+
+      '<div class="card"><h3 id="kp-form-title">Add a build phase</h3>' +
+      '<input type="hidden" id="kp-id">' +
+      '<div class="frow cols" style="grid-template-columns:2fr 1fr 1fr;">' +
+        '<div><label class="flbl">Name</label><input class="fld" id="kp-name"></div>' +
+        '<div><label class="flbl">Status</label><select class="fld" id="kp-status">' + options(PHASE_STATUS) + '</select></div>' +
+        '<div><label class="flbl">Order</label><input class="fld" id="kp-order" type="number" value="0"></div>' +
+      '</div>' +
+      '<div class="frow"><div><label class="flbl">Description</label><textarea class="fld" id="kp-desc" rows="2"></textarea></div></div>' +
+      '<div id="kp-msg" class="msg"></div>' +
+      '<div style="display:flex; gap:10px;"><button class="btn" id="kp-save">Save phase</button>' +
+      '<button class="btn ghost" id="kp-reset" hidden>Cancel editing</button></div></div>' +
+      '<div class="card"><h3>Build phases</h3><div class="scroll-x"><table><thead><tr>' +
+      '<th>Order</th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>' +
+      phases.map((p) =>
+        '<tr><td>' + p.sort_order + '</td>' +
+        '<td style="font-weight:600;">' + escapeHtml(p.name) + '<div class="muted" style="font-weight:400;">' + escapeHtml(p.description) + '</div></td>' +
+        '<td><select class="fld" style="width:auto;" data-quickstatus="' + p.id + '">' + options(PHASE_STATUS, p.status) + '</select></td>' +
+        '<td style="white-space:nowrap;"><button class="btn ghost small" data-edit="' + p.id + '">Edit</button> ' +
+        '<button class="btn danger small" data-del="' + p.id + '">Delete</button></td></tr>'
+      ).join('') + '</tbody></table></div>' +
+      (phases.length ? '' : '<div class="muted" style="padding:14px 0 4px;">No build phases yet.</div>') + '</div>' +
+
+      '<div class="card"><h3>Upload a photo</h3>' +
+      '<div class="frow cols" style="grid-template-columns:2fr 1fr;">' +
+        '<div><label class="flbl">Photo file</label><input class="fld" id="kph-file" type="file" accept="image/jpeg,image/png,image/webp" style="padding:9px;"></div>' +
+        '<div><label class="flbl">Phase (optional)</label><select class="fld" id="kph-phase"><option value="">General gallery</option>' + phases.map((p) => '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>').join('') + '</select></div>' +
+      '</div>' +
+      '<div class="frow"><div><label class="flbl">Caption</label><input class="fld" id="kph-caption" placeholder="e.g. Wing covering, June 2026"></div></div>' +
+      '<div id="kph-msg" class="msg"></div>' +
+      '<button class="btn" id="kph-upload">Upload photo</button></div>' +
+      '<div class="card"><h3>Photos (' + photos.length + ')</h3>' +
+      '<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;">' +
+      photos.map((ph) => {
+        const phaseName = ph.phase_id ? (phases.find((p) => p.id === ph.phase_id) || {}).name : 'General gallery';
+        return '<div style="border:1px solid #e7ecf3; border-radius:10px; overflow:hidden;">' +
+          '<img src="/api/koala/photos/' + ph.id + '" alt="' + escapeHtml(ph.caption || '') + '" style="width:100%; height:110px; object-fit:cover; display:block;">' +
+          '<div style="padding:8px 10px;">' +
+          '<div style="font-size:12.5px; font-weight:600;">' + escapeHtml(ph.caption || '(no caption)') + '</div>' +
+          '<div class="muted" style="font-size:11.5px; margin-bottom:8px;">' + escapeHtml(phaseName || 'General gallery') + '</div>' +
+          '<button class="btn danger small" data-delphoto="' + ph.id + '">Delete</button>' +
+          '</div></div>';
+      }).join('') +
+      '</div>' + (photos.length ? '' : '<div class="muted" style="padding:14px 0 4px;">No photos uploaded yet.</div>') + '</div>';
+
+    // -- page text --
+    H('ki-save').addEventListener('click', async () => {
+      const body = {
+        intro: H('ki-intro').value.trim(),
+        stat1_value: H('ki-s1v').value.trim(), stat1_label: H('ki-s1l').value.trim(),
+        stat2_value: H('ki-s2v').value.trim(), stat2_label: H('ki-s2l').value.trim(),
+        stat3_value: H('ki-s3v').value.trim(), stat3_label: H('ki-s3l').value.trim(),
+        cta_text: H('ki-cta').value.trim(),
+      };
+      try {
+        await api('/api/admin/koala/info', { method: 'POST', body });
+        flash(H('ki-msg'), true, 'Saved.');
+      } catch (e) { flash(H('ki-msg'), false, e.message); }
+    });
+
+    // -- phases --
+    const fillPhase = (p) => {
+      H('kp-id').value = p ? p.id : '';
+      H('kp-name').value = p ? p.name : '';
+      H('kp-status').value = p ? p.status : 'upcoming';
+      H('kp-order').value = p ? p.sort_order : phases.length;
+      H('kp-desc').value = p ? p.description : '';
+      H('kp-form-title').textContent = p ? 'Edit build phase' : 'Add a build phase';
+      H('kp-reset').hidden = !p;
+    };
+    H('kp-save').addEventListener('click', async () => {
+      const id = H('kp-id').value;
+      const body = {
+        name: H('kp-name').value.trim(), status: H('kp-status').value,
+        description: H('kp-desc').value.trim(), sort_order: +H('kp-order').value || 0,
+      };
+      try {
+        await api('/api/admin/koala/phases' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body });
+        RENDER.koala();
+      } catch (e) { flash(H('kp-msg'), false, e.message); }
+    });
+    H('kp-reset').addEventListener('click', () => fillPhase(null));
+    pane.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+      fillPhase(phases.find((p) => p.id === +b.getAttribute('data-edit')));
+      pane.scrollIntoView({ behavior: 'smooth' });
+    }));
+    pane.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Delete this build phase? Any photos assigned to it move to the general gallery.')) return;
+      await api('/api/admin/koala/phases/' + b.getAttribute('data-del'), { method: 'DELETE' });
+      RENDER.koala();
+    }));
+    pane.querySelectorAll('[data-quickstatus]').forEach((sel) => sel.addEventListener('change', async () => {
+      const p = phases.find((x) => x.id === +sel.getAttribute('data-quickstatus'));
+      if (!p) return;
+      try {
+        await api('/api/admin/koala/phases/' + p.id, {
+          method: 'PUT',
+          body: { name: p.name, status: sel.value, description: p.description, sort_order: p.sort_order },
+        });
+        flash(H('kp-msg'), true, 'Status updated.');
+      } catch (e) { flash(H('kp-msg'), false, e.message); }
+    }));
+
+    // -- photos --
+    H('kph-upload').addEventListener('click', async () => {
+      const fileInput = H('kph-file');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) { flash(H('kph-msg'), false, 'Choose a photo first.'); return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('caption', H('kph-caption').value.trim());
+      if (H('kph-phase').value) fd.append('phase_id', H('kph-phase').value);
+      H('kph-upload').disabled = true;
+      try {
+        await api('/api/admin/koala/photos', { method: 'POST', body: fd });
+        RENDER.koala();
+      } catch (e) {
+        flash(H('kph-msg'), false, e.message);
+        H('kph-upload').disabled = false;
+      }
+    });
+    pane.querySelectorAll('[data-delphoto]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Delete this photo?')) return;
+      await api('/api/admin/koala/photos/' + b.getAttribute('data-delphoto'), { method: 'DELETE' });
+      RENDER.koala();
+    }));
+  };
+
+  // ---------- groups ----------
+
+  RENDER.groups = async function () {
+    const pane = H('tab-groups');
+    const [groups, users] = await Promise.all([
+      api('/api/admin/groups').catch(() => []),
+      api('/api/admin/users').catch(() => []),
+    ]);
+    const activeUsers = users.filter((u) => u.status === 'active');
+
+    pane.innerHTML =
+      '<div class="card"><h3 id="grp-form-title">Add a group</h3>' +
+      '<input type="hidden" id="grp-id">' +
+      '<div class="frow"><div><label class="flbl">Name</label><input class="fld" id="grp-name" placeholder="e.g. Fly-In Committee"></div></div>' +
+      '<div id="grp-msg" class="msg"></div>' +
+      '<div style="display:flex; gap:10px;"><button class="btn" id="grp-save">Save group</button>' +
+      '<button class="btn ghost" id="grp-reset" hidden>Cancel editing</button></div></div>' +
+      '<div class="card"><h3>Groups</h3>' +
+      '<p class="muted" style="margin:0 0 14px;">Scope an event to a group in the Events tab to hide it from everyone except that group\'s members (admins always see everything).</p>' +
+      '<div class="scroll-x"><table><thead><tr><th>Name</th><th>Members</th><th></th></tr></thead><tbody>' +
+      groups.map((g) =>
+        '<tr><td style="font-weight:600;">' + escapeHtml(g.name) + '</td>' +
+        '<td>' + g.member_count + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn ghost small" data-manage="' + g.id + '">Manage members</button> ' +
+        '<button class="btn ghost small" data-edit="' + g.id + '">Rename</button> ' +
+        '<button class="btn danger small" data-del="' + g.id + '">Delete</button></td></tr>' +
+        '<tr id="grp-row-' + g.id + '" hidden><td colspan="3" style="background:#F6F8FC;"></td></tr>'
+      ).join('') + '</tbody></table></div>' +
+      (groups.length ? '' : '<div class="muted" style="padding:14px 0 4px;">No groups yet.</div>') + '</div>';
+
+    const fill = (g) => {
+      H('grp-id').value = g ? g.id : '';
+      H('grp-name').value = g ? g.name : '';
+      H('grp-form-title').textContent = g ? 'Rename group' : 'Add a group';
+      H('grp-reset').hidden = !g;
+    };
+
+    H('grp-save').addEventListener('click', async () => {
+      const id = H('grp-id').value;
+      const body = { name: H('grp-name').value.trim() };
+      try {
+        await api('/api/admin/groups' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body });
+        RENDER.groups();
+      } catch (e) { flash(H('grp-msg'), false, e.message); }
+    });
+    H('grp-reset').addEventListener('click', () => fill(null));
+    pane.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
+      fill(groups.find((g) => g.id === +b.getAttribute('data-edit')));
+      pane.scrollIntoView({ behavior: 'smooth' });
+    }));
+    pane.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Delete this group? Any events scoped to it will revert to their plain "members only" visibility instead of being group-restricted.')) return;
+      await api('/api/admin/groups/' + b.getAttribute('data-del'), { method: 'DELETE' });
+      RENDER.groups();
+    }));
+    pane.querySelectorAll('[data-manage]').forEach((b) => b.addEventListener('click', async () => {
+      const groupId = b.getAttribute('data-manage');
+      const row = H('grp-row-' + groupId);
+      if (!row.hidden) { row.hidden = true; return; }
+      const memberIds = await api('/api/admin/groups/' + groupId + '/members').catch(() => []);
+      row.firstElementChild.innerHTML = activeUsers.length
+        ? '<div style="display:flex; flex-direction:column; gap:8px;">' + activeUsers.map((u) =>
+            '<label style="display:flex; align-items:center; gap:9px; cursor:pointer;">' +
+            '<input type="checkbox" data-member-toggle="' + u.id + '"' + (memberIds.includes(u.id) ? ' checked' : '') + ' style="width:16px; height:16px; accent-color:#0A5BC4;">' +
+            escapeHtml(u.name) + ' <span class="muted">(' + escapeHtml(u.email) + ')</span></label>'
+          ).join('') + '</div>'
+        : 'No active members to add.';
+      row.querySelectorAll('[data-member-toggle]').forEach((cb) => cb.addEventListener('change', async () => {
+        const userId = cb.getAttribute('data-member-toggle');
+        cb.disabled = true;
+        try {
+          if (cb.checked) {
+            await api('/api/admin/groups/' + groupId + '/members', { method: 'POST', body: { user_id: +userId } });
+          } else {
+            await api('/api/admin/groups/' + groupId + '/members/' + userId, { method: 'DELETE' });
+          }
+        } finally { cb.disabled = false; }
+      }));
+      row.hidden = false;
+    }));
+  };
+
+  // ---------- polls ----------
+
+  const POLL_STATUS = [['draft', 'Draft'], ['active', 'Active'], ['closed', 'Closed']];
+
+  RENDER.polls = async function () {
+    const pane = H('tab-polls');
+    const polls = await api('/api/admin/polls').catch(() => []);
+
+    pane.innerHTML =
+      '<div class="card"><h3>Create a poll</h3>' +
+      '<p class="muted" style="margin:0 0 14px;">New polls start as a draft — set the status to "Active" once you\'re ready for members to vote.</p>' +
+      '<div class="frow"><div><label class="flbl">Question</label><input class="fld" id="pl-question"></div></div>' +
+      '<div class="frow"><div><label class="flbl">Description (optional)</label><textarea class="fld" id="pl-desc" rows="2"></textarea></div></div>' +
+      '<div id="pl-options"><label class="flbl">Options</label>' +
+        '<div class="frow" style="margin-bottom:8px;"><input class="fld pl-opt"></div>' +
+        '<div class="frow" style="margin-bottom:8px;"><input class="fld pl-opt"></div>' +
+      '</div>' +
+      '<button class="btn ghost small" id="pl-addopt" style="margin-bottom:16px;">+ Add option</button>' +
+      '<div id="pl-msg" class="msg"></div>' +
+      '<button class="btn" id="pl-save">Create poll</button></div>' +
+
+      '<div class="card"><h3>All polls</h3><div class="scroll-x"><table><thead><tr>' +
+      '<th>Question</th><th>Status</th><th>Votes</th><th></th></tr></thead><tbody>' +
+      polls.map((p) => {
+        const totalVotes = p.options.reduce((s, o) => s + o.vote_count, 0);
+        return '<tr><td style="font-weight:600;">' + escapeHtml(p.question) + '</td>' +
+        '<td><select class="fld" style="width:auto;" data-quickstatus="' + p.id + '">' + options(POLL_STATUS, p.status) + '</select></td>' +
+        '<td>' + totalVotes + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn ghost small" data-manage="' + p.id + '">' + (p.status === 'draft' ? 'Manage options' : 'Results') + '</button> ' +
+        '<button class="btn danger small" data-del="' + p.id + '">Delete</button></td></tr>' +
+        '<tr id="pl-row-' + p.id + '" hidden><td colspan="4" style="background:#F6F8FC;"></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (polls.length ? '' : '<div class="muted" style="padding:14px 0 4px;">No polls yet.</div>') + '</div>';
+
+    H('pl-addopt').addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.className = 'frow';
+      div.style.marginBottom = '8px';
+      div.innerHTML = '<input class="fld pl-opt">';
+      H('pl-options').insertBefore(div, H('pl-addopt'));
+    });
+
+    H('pl-save').addEventListener('click', async () => {
+      const opts = Array.from(pane.querySelectorAll('.pl-opt')).map((i) => i.value.trim()).filter(Boolean);
+      const body = { question: H('pl-question').value.trim(), description: H('pl-desc').value.trim(), options: opts };
+      try {
+        await api('/api/admin/polls', { method: 'POST', body });
+        RENDER.polls();
+      } catch (e) { flash(H('pl-msg'), false, e.message); }
+    });
+
+    pane.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Delete this poll? All votes are removed too.')) return;
+      await api('/api/admin/polls/' + b.getAttribute('data-del'), { method: 'DELETE' });
+      RENDER.polls();
+    }));
+
+    pane.querySelectorAll('[data-quickstatus]').forEach((sel) => sel.addEventListener('change', async () => {
+      const p = polls.find((x) => x.id === +sel.getAttribute('data-quickstatus'));
+      if (!p) return;
+      try {
+        await api('/api/admin/polls/' + p.id, {
+          method: 'PUT',
+          body: { question: p.question, description: p.description, status: sel.value, closes_at: p.closes_at },
+        });
+        RENDER.polls();
+      } catch (e) { flash(H('pl-msg'), false, e.message); }
+    }));
+
+    pane.querySelectorAll('[data-manage]').forEach((b) => b.addEventListener('click', async () => {
+      const pollId = b.getAttribute('data-manage');
+      const p = polls.find((x) => x.id === +pollId);
+      const row = H('pl-row-' + pollId);
+      if (!row.hidden) { row.hidden = true; return; }
+      if (p.status === 'draft') {
+        row.firstElementChild.innerHTML =
+          '<div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">' + p.options.map((o) =>
+            '<div style="display:flex; align-items:center; gap:10px;"><span style="flex:1;">' + escapeHtml(o.label) + '</span>' +
+            '<button class="btn danger small" data-delopt="' + o.id + '">Remove</button></div>'
+          ).join('') + '</div>' +
+          '<div style="display:flex; gap:10px;"><input class="fld" id="pl-newopt-' + pollId + '" placeholder="New option" style="max-width:260px;">' +
+          '<button class="btn ghost small" data-addopt="' + pollId + '">Add</button></div>';
+        row.querySelector('[data-addopt]').addEventListener('click', async () => {
+          const input = H('pl-newopt-' + pollId);
+          if (!input.value.trim()) return;
+          try {
+            await api('/api/admin/polls/' + pollId + '/options', { method: 'POST', body: { label: input.value.trim() } });
+            RENDER.polls();
+          } catch (e) { flash(H('pl-msg'), false, e.message); }
+        });
+        row.querySelectorAll('[data-delopt]').forEach((db) => db.addEventListener('click', async () => {
+          await api('/api/admin/polls/' + pollId + '/options/' + db.getAttribute('data-delopt'), { method: 'DELETE' });
+          RENDER.polls();
+        }));
+      } else {
+        const totalVotes = p.options.reduce((s, o) => s + o.vote_count, 0);
+        row.firstElementChild.innerHTML = p.options.map((o) => {
+          const pct = totalVotes ? Math.round((o.vote_count / totalVotes) * 100) : 0;
+          return '<div style="margin-bottom:10px;"><div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:4px;">' +
+            '<span>' + escapeHtml(o.label) + '</span><span class="muted">' + o.vote_count + ' (' + pct + '%)</span></div>' +
+            '<div style="background:#e2e8f1; border-radius:6px; height:8px;"><div style="background:#0A5BC4; width:' + pct + '%; height:8px; border-radius:6px;"></div></div></div>';
+        }).join('');
+      }
+      row.hidden = false;
+    }));
   };
 
   boot();

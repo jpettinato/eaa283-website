@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const evs = (c.dateStr && evByDate[c.dateStr]) || [];
         const hasSel = evs.some(e => e.id === sel);
         const bg = hasSel ? '#EAF1FB' : (c.inMonth ? '#fff' : '#fafbfd');
-        html += '<div style="border-right:1px solid #eef1f6; min-height:112px; padding:8px; display:flex; flex-direction:column; gap:5px; background:' + bg + ';">' +
+        html += '<div class="cal-day-cell" style="border-right:1px solid #eef1f6; padding:8px; display:flex; flex-direction:column; gap:5px; background:' + bg + ';">' +
           '<span style="font-size:13px; font-weight:700; margin-bottom:2px; color:' + (c.inMonth ? '#16203A' : '#c2cad8') + ';">' + c.day + '</span>';
         for (const e of evs) {
           const color = KIND[e.kind] || '#0A5BC4';

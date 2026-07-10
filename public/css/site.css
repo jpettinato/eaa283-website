@@ -192,3 +192,7 @@ body { margin: 0; background: #fff; font-family: 'Public Sans', sans-serif; }
 /* The events calendar keeps its 7 columns but scrolls sideways on phones. */
 .cal-scroll { overflow-x: auto; }
 .cal-scroll .cal-min { min-width: 640px; }
+
+/* Every day cell stays a fixed, uniform height regardless of event count —
+   extra events scroll within the cell instead of stretching the whole row. */
+.cal-day-cell { height: 112px; overflow-y: auto; scrollbar-width: thin; }
