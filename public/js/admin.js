@@ -696,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
       div.className = 'frow';
       div.style.marginBottom = '8px';
       div.innerHTML = '<input class="fld pl-opt">';
-      H('pl-options').insertBefore(div, H('pl-addopt'));
+      H('pl-options').appendChild(div);
     });
 
     H('pl-save').addEventListener('click', async () => {
