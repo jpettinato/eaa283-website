@@ -197,10 +197,10 @@ document.addEventListener('DOMContentLoaded', () => {
           '<h3 style="font-family:\'Archivo\',sans-serif; font-weight:800; font-size:19px; color:#16203A; margin:0 0 14px;">Needs your attention</h3>' +
           '<div style="display:flex; flex-direction:column; gap:10px;">' +
             attnEvents.map((e) =>
-              '<div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; background:#FDF3E3; border-radius:11px; padding:14px 16px;">' +
+              '<a href="#" data-goto-tab="calendar" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; background:#FDF3E3; border-radius:11px; padding:14px 16px; text-decoration:none;">' +
                 '<span style="font-size:14.5px; color:#16203A;">RSVP for <strong>' + escapeHtml(e.title) + '</strong> — ' + fmtDate(e.date, { month: 'short', day: 'numeric' }) + '</span>' +
-                '<button data-attn-rsvp="' + e.id + '" style="background:#0E7C66; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit;">✓ Going</button>' +
-              '</div>').join('') +
+                '<span style="color:#0A5BC4; font-weight:700; font-size:13.5px;">RSVP →</span>' +
+              '</a>').join('') +
             attnPolls.map((p) =>
               '<a href="#" data-goto-tab="polls" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; background:#FDF3E3; border-radius:11px; padding:14px 16px; text-decoration:none;">' +
                 '<span style="font-size:14.5px; color:#16203A;">New poll: <strong>' + escapeHtml(p.question) + '</strong></span>' +
@@ -258,16 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
       attentionCard +
       '<div class="g2" style="display:grid; grid-template-columns:repeat(2,1fr); gap:20px; margin-bottom:20px;">' + duesCard + nextCard + '</div>' + docsBox);
 
-    pane.querySelectorAll('[data-attn-rsvp]').forEach((btn) => btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try {
-        await api('/api/member/rsvp', { method: 'POST', body: { event_id: +btn.getAttribute('data-attn-rsvp'), status: 'going' } });
-        renderOverview();
-      } catch (e) {
-        btn.disabled = false;
-        alert(e.message);
-      }
-    }));
     pane.querySelectorAll('[data-goto-tab]').forEach((a) => a.addEventListener('click', (e) => {
       e.preventDefault();
       selectTab(a.getAttribute('data-goto-tab'));
